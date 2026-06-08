@@ -98,7 +98,7 @@ def analyse(scraped_data: dict[str, list[dict]]) -> dict:
     logger.info("Sending data to Claude for analysis...")
     message = client.messages.create(
         model=MODEL,
-        max_tokens=16384,
+        max_tokens=64000,
         messages=[{"role": "user", "content": prompt}],
     )
     if message.stop_reason == "max_tokens":
