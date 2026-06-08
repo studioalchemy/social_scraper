@@ -10,26 +10,28 @@ import config
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 587
+SMTP_PORT = 465  # implicit TLS; many PaaS firewalls (incl. Railway) block 587
 SMTP_TIMEOUT = 30
 
 THUMBNAIL_FETCH_TIMEOUT = 10  # seconds per image
 
 
-class IPv4SMTP(smtplib.SMTP):
-    """Forces IPv4 for the SMTP connection.
+class IPv4SMTPSSL(smtplib.SMTP_SSL):
+    """SMTP_SSL that forces IPv4 resolution.
 
-    On hosts whose IPv6 stack has no route to the SMTP server (common on
-    some PaaS containers), Python's default resolver returns the AAAA
-    record first and the connect fails with ENETUNREACH. Resolving as
-    AF_INET only sidesteps the problem.
+    Avoids two PaaS gotchas in one connection:
+      1. AAAA-only resolution paths that ENETUNREACH on the host.
+      2. Many platforms block outbound 587 STARTTLS; 465 implicit TLS
+         goes through.
+    Hostname is preserved through the cert wrap so verification still
+    validates against smtp.gmail.com.
     """
 
     def _get_socket(self, host, port, timeout):
         infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
         _, _, _, _, addr = infos[0]
         sock = socket.create_connection(addr, timeout=timeout)
-        return sock
+        return self.context.wrap_socket(sock, server_hostname=self._host)
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────────────
@@ -369,9 +371,7 @@ def send_report(report: dict) -> None:
         root.attach(img)
 
     logger.info(f"Sending report to: {', '.join(recipients)}")
-    with IPv4SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
-        server.ehlo()
-        server.starttls()
+    with IPv4SMTPSSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
         server.login(sender, password)
         server.sendmail(sender, recipients, root.as_string())
 

@@ -37,12 +37,13 @@ def _run_actor_for_account(client: ApifyClient, username: str) -> list[dict]:
     }
 
     logger.info(f"Starting Apify actor run for @{username}...")
-    # apify-client 2.x dropped the timeout_secs kwarg on ActorClient.call().
-    # The actor's own default timeout applies; no need to override.
+    # apify-client 2.x: .call() returns a Run typed-dict object that
+    # supports bracket access but not .get(). Default actor timeout applies.
     run = client.actor("apify/instagram-scraper").call(run_input=run_input)
 
-    if not run or run.get("status") not in ("SUCCEEDED",):
-        raise RuntimeError(f"Apify run for @{username} ended with status: {run.get('status') if run else 'None'}")
+    status = run["status"] if run else None
+    if status != "SUCCEEDED":
+        raise RuntimeError(f"Apify run for @{username} ended with status: {status}")
 
     dataset_id = run["defaultDatasetId"]
     items = list(client.dataset(dataset_id).iterate_items())
