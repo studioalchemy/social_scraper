@@ -20,7 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-SETTINGS_PATH = Path("settings.json")
+SETTINGS_PATH = Path(os.environ.get("SETTINGS_DIR", ".")) / "settings.json"
 DEFAULT_SETTINGS = {"accounts": [], "recipient_emails": [], "schedule_days": 7}
 
 _run_state: dict = {
@@ -42,6 +42,7 @@ def load_settings() -> dict:
 
 
 def save_settings(data: dict) -> None:
+    SETTINGS_PATH.parent.mkdir(parents=True, exist_ok=True)
     SETTINGS_PATH.write_text(json.dumps(data, indent=2))
 
 

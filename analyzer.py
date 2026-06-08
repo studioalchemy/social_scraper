@@ -6,7 +6,7 @@ import config
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-opus-4-7"
+MODEL = "claude-sonnet-4-6"
 
 
 def _build_prompt(scraped_data: dict[str, list[dict]], report_date: str) -> str:

@@ -1,13 +1,17 @@
 import smtplib
 import logging
+import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from email.mime.image import MIMEImage
 import config
 
 logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+
+THUMBNAIL_FETCH_TIMEOUT = 10  # seconds per image
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────────────
@@ -20,6 +24,13 @@ def _esc(text: str) -> str:
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def _img_src(url: str, cid_map: dict) -> str:
+    # If we managed to inline this URL at send-time, point at the CID attachment
+    # so the thumbnail survives Instagram's signed-URL expiry.
+    cid = cid_map.get(url)
+    return f"cid:{cid}" if cid else url
 
 
 def _section_header(number: str, title: str) -> str:
@@ -41,7 +52,7 @@ def _prose(text: str) -> str:
     return "".join(f"<p>{_esc(p.strip())}</p>" for p in paragraphs if p.strip())
 
 
-def _account_card(account_data: dict, raw_posts: list[dict]) -> str:
+def _account_card(account_data: dict, raw_posts: list[dict], cid_map: dict) -> str:
     username = account_data.get("username", "")
     display_name = account_data.get("display_name", username)
 
@@ -64,10 +75,14 @@ def _account_card(account_data: dict, raw_posts: list[dict]) -> str:
             thumb = post.get("displayUrl", "")
             url = post.get("url", "#")
             caption = post.get("caption", "")[:120]
+            img_html = (
+                f'<img src="{_esc(_img_src(thumb, cid_map))}" alt="thumb" width="120">'
+                if thumb else ''
+            )
             rows += f"""
             <tr>
               <td class="rank">#{i + 1}</td>
-              <td class="thumb">{f'<img src="{_esc(thumb)}" alt="thumb" width="120">' if thumb else ''}</td>
+              <td class="thumb">{img_html}</td>
               <td class="caption"><a href="{_esc(url)}" target="_blank" rel="noopener">{_esc(caption) or "(no caption)"}</a></td>
               <td class="badge">{_esc(post.get("type", ""))}</td>
               <td class="num">{post.get("likesCount", 0):,}</td>
@@ -81,10 +96,14 @@ def _account_card(account_data: dict, raw_posts: list[dict]) -> str:
             thumb = p.get("display_url", "")
             url = p.get("url", "#")
             caption = p.get("caption_preview", "")
+            img_html = (
+                f'<img src="{_esc(_img_src(thumb, cid_map))}" alt="thumb" width="120">'
+                if thumb else ''
+            )
             rows += f"""
             <tr>
               <td class="rank">#{_esc(str(p.get("rank", i + 1)))}</td>
-              <td class="thumb">{f'<img src="{_esc(thumb)}" alt="thumb" width="120">' if thumb else ''}</td>
+              <td class="thumb">{img_html}</td>
               <td class="caption"><a href="{_esc(url)}" target="_blank" rel="noopener">{_esc(caption) or "(no caption)"}</a></td>
               <td class="badge">{_esc(str(p.get("type", "")))}</td>
               <td class="num">{p.get("likes", 0):,}</td>
@@ -126,7 +145,8 @@ def _account_card(account_data: dict, raw_posts: list[dict]) -> str:
     </div>"""
 
 
-def build_html(report: dict) -> str:
+def build_html(report: dict, cid_map: dict | None = None) -> str:
+    cid_map = cid_map or {}
     report_date = report.get("report_date", "")
     accounts_analysed = report.get("accounts_analysed", "")
     raw_posts_map: dict = report.get("_raw_posts", {})
@@ -139,7 +159,7 @@ def build_html(report: dict) -> str:
     account_cards = ""
     for acc in section1.get("accounts", []):
         username = acc.get("username", "")
-        account_cards += _account_card(acc, raw_posts_map.get(username, []))
+        account_cards += _account_card(acc, raw_posts_map.get(username, []), cid_map)
 
     def s2_row(label: str, key: str) -> str:
         return f"""
@@ -264,8 +284,49 @@ def build_html(report: dict) -> str:
 </html>"""
 
 
+# ── Inline thumbnail handling ────────────────────────────────────────────────
+
+def _collect_thumbnail_urls(report: dict) -> list[str]:
+    urls: list[str] = []
+    seen: set[str] = set()
+    raw_posts_map: dict = report.get("_raw_posts", {})
+    for acc in report.get("section1", {}).get("accounts", []):
+        username = acc.get("username", "")
+        raw_posts = raw_posts_map.get(username, [])
+        sources = raw_posts if raw_posts else (acc.get("top_5_posts") or [])
+        for p in sources:
+            url = p.get("displayUrl") or p.get("display_url")
+            if url and url not in seen:
+                seen.add(url)
+                urls.append(url)
+    return urls
+
+
+def _download_thumbnails(urls: list[str]) -> dict[str, tuple[str, bytes, str]]:
+    """Fetch each URL once. Returns {url: (cid, image_bytes, subtype)}.
+
+    Silent skip on failure so a single dead thumbnail doesn't block the email.
+    """
+    out: dict[str, tuple[str, bytes, str]] = {}
+    for i, url in enumerate(urls):
+        try:
+            resp = requests.get(url, timeout=THUMBNAIL_FETCH_TIMEOUT)
+            resp.raise_for_status()
+            ctype = resp.headers.get("Content-Type", "image/jpeg")
+            subtype = ctype.split("/")[-1].split(";")[0].strip() or "jpeg"
+            out[url] = (f"thumb-{i}", resp.content, subtype)
+        except Exception as exc:
+            logger.warning(f"Thumbnail fetch failed for index {i}: {exc}")
+    return out
+
+
 def send_report(report: dict) -> None:
-    html_body = build_html(report)
+    thumb_urls = _collect_thumbnail_urls(report)
+    logger.info(f"Inlining {len(thumb_urls)} thumbnail(s) for durability")
+    fetched = _download_thumbnails(thumb_urls)
+    cid_map = {url: data[0] for url, data in fetched.items()}
+
+    html_body = build_html(report, cid_map=cid_map)
     report_date = report.get("report_date", "")
     subject = f"Instagram Trend Report — {report_date}"
 
@@ -273,17 +334,27 @@ def send_report(report: dict) -> None:
     recipients = config.RECIPIENT_EMAILS()
     password = config.GMAIL_APP_PASSWORD()
 
-    msg = MIMEMultipart("alternative")
-    msg["Subject"] = subject
-    msg["From"] = sender
-    msg["To"] = ", ".join(recipients)
-    msg.attach(MIMEText(html_body, "html"))
+    # multipart/related wraps the HTML + inline images so they travel together.
+    root = MIMEMultipart("related")
+    root["Subject"] = subject
+    root["From"] = sender
+    root["To"] = ", ".join(recipients)
+
+    alt = MIMEMultipart("alternative")
+    alt.attach(MIMEText(html_body, "html"))
+    root.attach(alt)
+
+    for url, (cid, data, subtype) in fetched.items():
+        img = MIMEImage(data, _subtype=subtype)
+        img.add_header("Content-ID", f"<{cid}>")
+        img.add_header("Content-Disposition", "inline", filename=f"{cid}.{subtype}")
+        root.attach(img)
 
     logger.info(f"Sending report to: {', '.join(recipients)}")
     with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
         server.ehlo()
         server.starttls()
         server.login(sender, password)
-        server.sendmail(sender, recipients, msg.as_string())
+        server.sendmail(sender, recipients, root.as_string())
 
     logger.info("Report sent successfully.")
