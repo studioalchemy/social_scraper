@@ -1,4 +1,5 @@
 import smtplib
+import socket
 import logging
 import requests
 from email.mime.multipart import MIMEMultipart
@@ -10,8 +11,25 @@ logger = logging.getLogger(__name__)
 
 SMTP_HOST = "smtp.gmail.com"
 SMTP_PORT = 587
+SMTP_TIMEOUT = 30
 
 THUMBNAIL_FETCH_TIMEOUT = 10  # seconds per image
+
+
+class IPv4SMTP(smtplib.SMTP):
+    """Forces IPv4 for the SMTP connection.
+
+    On hosts whose IPv6 stack has no route to the SMTP server (common on
+    some PaaS containers), Python's default resolver returns the AAAA
+    record first and the connect fails with ENETUNREACH. Resolving as
+    AF_INET only sidesteps the problem.
+    """
+
+    def _get_socket(self, host, port, timeout):
+        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
+        _, _, _, _, addr = infos[0]
+        sock = socket.create_connection(addr, timeout=timeout)
+        return sock
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────────────
@@ -351,7 +369,7 @@ def send_report(report: dict) -> None:
         root.attach(img)
 
     logger.info(f"Sending report to: {', '.join(recipients)}")
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT) as server:
+    with IPv4SMTP(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
         server.ehlo()
         server.starttls()
         server.login(sender, password)

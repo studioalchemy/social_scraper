@@ -37,7 +37,9 @@ def _run_actor_for_account(client: ApifyClient, username: str) -> list[dict]:
     }
 
     logger.info(f"Starting Apify actor run for @{username}...")
-    run = client.actor("apify/instagram-scraper").call(run_input=run_input, timeout_secs=TIMEOUT_SECONDS)
+    # apify-client 2.x dropped the timeout_secs kwarg on ActorClient.call().
+    # The actor's own default timeout applies; no need to override.
+    run = client.actor("apify/instagram-scraper").call(run_input=run_input)
 
     if not run or run.get("status") not in ("SUCCEEDED",):
         raise RuntimeError(f"Apify run for @{username} ended with status: {run.get('status') if run else 'None'}")
