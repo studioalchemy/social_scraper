@@ -1,37 +1,37 @@
-import smtplib
-import socket
+import base64
 import logging
 import requests
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.mime.image import MIMEImage
+
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+
 import config
 
 logger = logging.getLogger(__name__)
 
-SMTP_HOST = "smtp.gmail.com"
-SMTP_PORT = 465  # implicit TLS; many PaaS firewalls (incl. Railway) block 587
-SMTP_TIMEOUT = 30
-
 THUMBNAIL_FETCH_TIMEOUT = 10  # seconds per image
+GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.send"]
 
 
-class IPv4SMTPSSL(smtplib.SMTP_SSL):
-    """SMTP_SSL that forces IPv4 resolution.
+def _gmail_service():
+    """Build a Gmail API client authenticated via the saved refresh token.
 
-    Avoids two PaaS gotchas in one connection:
-      1. AAAA-only resolution paths that ENETUNREACH on the host.
-      2. Many platforms block outbound 587 STARTTLS; 465 implicit TLS
-         goes through.
-    Hostname is preserved through the cert wrap so verification still
-    validates against smtp.gmail.com.
+    The Credentials object automatically refreshes the short-lived access
+    token before each call, so we can persist forever as long as the
+    refresh token stays valid.
     """
-
-    def _get_socket(self, host, port, timeout):
-        infos = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)
-        _, _, _, _, addr = infos[0]
-        sock = socket.create_connection(addr, timeout=timeout)
-        return self.context.wrap_socket(sock, server_hostname=self._host)
+    creds = Credentials(
+        token=None,
+        refresh_token=config.GOOGLE_REFRESH_TOKEN(),
+        token_uri="https://oauth2.googleapis.com/token",
+        client_id=config.GOOGLE_CLIENT_ID(),
+        client_secret=config.GOOGLE_CLIENT_SECRET(),
+        scopes=GMAIL_SCOPES,
+    )
+    return build("gmail", "v1", credentials=creds, cache_discovery=False)
 
 
 # ── HTML helpers ─────────────────────────────────────────────────────────────
@@ -352,7 +352,6 @@ def send_report(report: dict) -> None:
 
     sender = config.GMAIL_SENDER_EMAIL()
     recipients = config.RECIPIENT_EMAILS()
-    password = config.GMAIL_APP_PASSWORD()
 
     # multipart/related wraps the HTML + inline images so they travel together.
     root = MIMEMultipart("related")
@@ -370,9 +369,10 @@ def send_report(report: dict) -> None:
         img.add_header("Content-Disposition", "inline", filename=f"{cid}.{subtype}")
         root.attach(img)
 
-    logger.info(f"Sending report to: {', '.join(recipients)}")
-    with IPv4SMTPSSL(SMTP_HOST, SMTP_PORT, timeout=SMTP_TIMEOUT) as server:
-        server.login(sender, password)
-        server.sendmail(sender, recipients, root.as_string())
+    # Gmail API takes a base64url-encoded RFC 2822 message.
+    raw = base64.urlsafe_b64encode(root.as_bytes()).decode("utf-8")
 
+    logger.info(f"Sending report to: {', '.join(recipients)} via Gmail API")
+    service = _gmail_service()
+    service.users().messages().send(userId="me", body={"raw": raw}).execute()
     logger.info("Report sent successfully.")

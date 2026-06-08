@@ -13,8 +13,12 @@ def get_required(key: str) -> str:
 
 APIFY_API_TOKEN = lambda: get_required("APIFY_API_TOKEN")
 ANTHROPIC_API_KEY = lambda: get_required("ANTHROPIC_API_KEY")
+
+# Gmail API (OAuth) — replaced SMTP because Railway blocks outbound SMTP.
 GMAIL_SENDER_EMAIL = lambda: get_required("GMAIL_SENDER_EMAIL")
-GMAIL_APP_PASSWORD = lambda: get_required("GMAIL_APP_PASSWORD")
+GOOGLE_CLIENT_ID = lambda: get_required("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = lambda: get_required("GOOGLE_CLIENT_SECRET")
+GOOGLE_REFRESH_TOKEN = lambda: get_required("GOOGLE_REFRESH_TOKEN")
 
 RECIPIENT_EMAILS = lambda: [
     e.strip() for e in get_required("RECIPIENT_EMAILS").split(",") if e.strip()
