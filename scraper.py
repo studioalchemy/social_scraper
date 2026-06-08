@@ -28,6 +28,31 @@ def _extract_post(item: dict) -> dict:
     }
 
 
+def _run_field(run, *names):
+    """Read a field from the Run object regardless of SDK version.
+
+    apify-client 1.x returned a dict (use bracket / camelCase).
+    apify-client 2.x returns a Pydantic-style Run typed object
+    (use attribute / snake_case). Try both, fall through to model_dump.
+    """
+    for n in names:
+        if hasattr(run, n):
+            val = getattr(run, n)
+            if val is not None:
+                return val
+    for n in names:
+        try:
+            return run[n]
+        except (TypeError, KeyError):
+            continue
+    if hasattr(run, "model_dump"):
+        d = run.model_dump(by_alias=True)
+        for n in names:
+            if n in d and d[n] is not None:
+                return d[n]
+    return None
+
+
 def _run_actor_for_account(client: ApifyClient, username: str) -> list[dict]:
     run_input = {
         "directUrls": [f"https://www.instagram.com/{username}/"],
@@ -37,15 +62,16 @@ def _run_actor_for_account(client: ApifyClient, username: str) -> list[dict]:
     }
 
     logger.info(f"Starting Apify actor run for @{username}...")
-    # apify-client 2.x: .call() returns a Run typed-dict object that
-    # supports bracket access but not .get(). Default actor timeout applies.
     run = client.actor("apify/instagram-scraper").call(run_input=run_input)
 
-    status = run["status"] if run else None
+    status = _run_field(run, "status")
     if status != "SUCCEEDED":
         raise RuntimeError(f"Apify run for @{username} ended with status: {status}")
 
-    dataset_id = run["defaultDatasetId"]
+    dataset_id = _run_field(run, "default_dataset_id", "defaultDatasetId")
+    if not dataset_id:
+        raise RuntimeError(f"Apify run for @{username} returned no dataset id")
+
     items = list(client.dataset(dataset_id).iterate_items())
     logger.info(f"  @{username}: fetched {len(items)} posts")
     return [_extract_post(item) for item in items]
