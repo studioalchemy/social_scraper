@@ -29,7 +29,7 @@ function IconX(props: React.SVGProps<SVGSVGElement>) {
 }
 function IconPlay(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" {...props}>
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" {...props}>
       <path d="M7 4.5v15l13-7.5z" />
     </svg>
   );
@@ -47,6 +47,16 @@ function IconPlus(props: React.SVGProps<SVGSVGElement>) {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
       stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" {...props}>
       <path d="M12 5v14 M5 12h14" />
+    </svg>
+  );
+}
+function IconAlert(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 8v5" />
+      <path d="M12 16h.01" />
     </svg>
   );
 }
@@ -82,7 +92,13 @@ function GlassCard({
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ color: "var(--ink-soft)", fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>
+    <div style={{
+      color: "var(--ink-muted)",
+      fontSize: 12,
+      fontWeight: 500,
+      marginBottom: 8,
+      letterSpacing: 0.1,
+    }}>
       {children}
     </div>
   );
@@ -212,31 +228,30 @@ export default function Home() {
 
   const statusMeta =
     status.status === "running"
-      ? { color: "oklch(0.85 0.14 90)",  label: "Running" }
+      ? { color: "var(--warn)",   label: "Running" }
       : status.status === "success"
-      ? { color: "var(--success)",       label: "Last run succeeded" }
+      ? { color: "var(--success)", label: "Last run succeeded" }
       : status.status === "error"
-      ? { color: "var(--danger)",        label: "Last run failed" }
-      : { color: "rgba(255,255,255,0.6)", label: "Idle" };
+      ? { color: "var(--danger)",  label: "Last run failed" }
+      : { color: "var(--ink-muted)", label: "Idle" };
 
   if (loading) {
     return (
       <>
-        <div className="aurora" />
         <div className="grain" />
         <div style={{
           display: "flex", alignItems: "center", justifyContent: "center",
           minHeight: "100dvh",
         }}>
           <div className="glass" style={{
-            padding: "32px 44px", display: "flex", alignItems: "center", gap: 14,
+            padding: "28px 40px", display: "flex", alignItems: "center", gap: 14,
           }}>
             <div className="spin" style={{
-              width: 18, height: 18, borderRadius: "50%",
-              border: "2px solid rgba(255,255,255,0.25)",
+              width: 16, height: 16, borderRadius: "50%",
+              border: "2px solid rgba(255,255,255,0.18)",
               borderTopColor: "rgba(255,255,255,0.95)",
             }} />
-            <span style={{ color: "var(--ink-soft)" }}>Loading…</span>
+            <span style={{ color: "var(--ink-soft)" }}>Loading</span>
           </div>
         </div>
       </>
@@ -247,13 +262,12 @@ export default function Home() {
 
   return (
     <>
-      <div className="aurora" />
       <div className="grain" />
 
       <main style={{
-        maxWidth: 980,
+        maxWidth: 920,
         margin: "0 auto",
-        padding: "56px 22px 140px",
+        padding: "56px 22px 160px",
       }}>
         {/* Header */}
         <header className="rise rise-1" style={{
@@ -261,13 +275,15 @@ export default function Home() {
           alignItems: "flex-end",
           justifyContent: "space-between",
           gap: 16,
-          marginBottom: 44,
+          marginBottom: 32,
           flexWrap: "wrap",
         }}>
           <div>
-            <h1 className="display" style={{
-              fontSize: "clamp(2.4rem, 5vw, 3.6rem)",
-              lineHeight: 1.02,
+            <h1 style={{
+              fontSize: "clamp(2.1rem, 4.8vw, 3rem)",
+              fontWeight: 600,
+              letterSpacing: "-0.03em",
+              lineHeight: 1.05,
               color: "var(--ink-bright)",
             }}>
               Instagram trend agent
@@ -275,10 +291,10 @@ export default function Home() {
             <p style={{
               color: "var(--ink-soft)",
               marginTop: 10,
-              fontSize: 15,
-              maxWidth: 56 + "ch",
+              fontSize: 14.5,
+              maxWidth: "62ch",
             }}>
-              Watch a set of competitors. Get a written report and the top posts emailed to you on a cadence you set.
+              Watch a set of competitors. A written report and the top posts get emailed to you on the cadence you set.
             </p>
           </div>
 
@@ -291,7 +307,7 @@ export default function Home() {
           }}>
             <span className={status.status === "running" ? "pulse-dot" : ""}
               style={{
-                width: 9, height: 9, borderRadius: "50%",
+                width: 8, height: 8, borderRadius: "50%",
                 background: statusMeta.color,
                 display: "inline-block",
                 position: "relative",
@@ -303,10 +319,48 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Hero: Schedule */}
+        {/* Error banner — prominent at top */}
+        {status.last_error && (
+          <div className="glass rise rise-2" style={{
+            padding: "14px 18px",
+            marginBottom: 20,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+            borderColor: "rgba(255, 120, 120, 0.30)",
+            background: "rgba(255, 80, 80, 0.06)",
+          }}>
+            <span style={{
+              color: "var(--danger)",
+              marginTop: 2,
+              flexShrink: 0,
+            }}>
+              <IconAlert />
+            </span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{
+                color: "rgba(255, 200, 200, 0.96)",
+                fontSize: 13.5,
+                fontWeight: 500,
+                marginBottom: 2,
+              }}>
+                Last run failed
+              </div>
+              <div style={{
+                color: "rgba(255, 200, 200, 0.78)",
+                fontSize: 13,
+                wordBreak: "break-word",
+              }}>
+                {status.last_error}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Hero: Cadence */}
         <GlassCard className="rise rise-2" style={{
-          padding: "34px 36px",
-          marginBottom: 22,
+          padding: "32px 34px",
+          marginBottom: 20,
         }}>
           <div style={{
             display: "grid",
@@ -316,35 +370,36 @@ export default function Home() {
           }}>
             <div>
               <FieldLabel>Cadence</FieldLabel>
-              <div className="display" style={{
-                fontSize: "clamp(2.2rem, 4.5vw, 3.2rem)",
+              <div style={{
+                fontSize: "clamp(1.9rem, 4vw, 2.6rem)",
+                fontWeight: 600,
+                letterSpacing: "-0.025em",
                 lineHeight: 1.0,
                 color: "var(--ink-bright)",
-                marginBottom: 4,
+                marginBottom: 6,
               }}>
                 Every {settings.schedule_days} {settings.schedule_days === 1 ? "day" : "days"}
               </div>
-              <div style={{ color: "var(--ink-soft)", fontSize: 14 }}>
-                Last run: {formatDate(status.last_run)}
+              <div style={{ color: "var(--ink-soft)", fontSize: 13.5 }}>
+                Last run · {formatDate(status.last_run)}
               </div>
             </div>
 
             <div style={{
-              fontFamily: "'Fraunces', serif",
-              fontSize: 80,
-              lineHeight: 1,
-              color: "rgba(255,255,255,0.92)",
-              fontWeight: 300,
-              fontVariationSettings: '"opsz" 144',
-              letterSpacing: "-0.04em",
+              fontSize: 96,
+              lineHeight: 0.9,
+              fontWeight: 200,
+              color: "var(--ink-bright)",
+              letterSpacing: "-0.06em",
               textAlign: "right",
               minWidth: 90,
+              fontVariantNumeric: "tabular-nums",
             }}>
               {settings.schedule_days}
             </div>
           </div>
 
-          <div style={{ marginTop: 26 }}>
+          <div style={{ marginTop: 24 }}>
             <input
               type="range"
               min={1}
@@ -366,33 +421,18 @@ export default function Home() {
               <span>Monthly</span>
             </div>
           </div>
-
-          {status.last_error && (
-            <div style={{
-              marginTop: 22,
-              padding: "12px 16px",
-              borderRadius: 12,
-              background: "rgba(255, 90, 90, 0.10)",
-              border: "1px solid rgba(255, 120, 120, 0.30)",
-              color: "rgba(255, 200, 200, 0.95)",
-              fontSize: 13,
-            }}>
-              <strong style={{ fontWeight: 600 }}>Last error: </strong>
-              {status.last_error}
-            </div>
-          )}
         </GlassCard>
 
         {/* Two-col forms */}
         <div style={{
           display: "grid",
           gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 22,
-          marginBottom: 22,
+          gap: 20,
+          marginBottom: 20,
         }}>
           {/* Accounts */}
           <GlassCard className="rise rise-3">
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: "var(--ink-bright)" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink-bright)" }}>
               Accounts
             </h2>
             <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
@@ -427,7 +467,7 @@ export default function Home() {
 
           {/* Emails */}
           <GlassCard className="rise rise-4">
-            <h2 style={{ fontSize: 17, fontWeight: 600, color: "var(--ink-bright)" }}>
+            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink-bright)" }}>
               Recipients
             </h2>
             <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
@@ -462,14 +502,25 @@ export default function Home() {
           </GlassCard>
         </div>
 
+        {/* Hint card explaining the buttons */}
+        <div className="rise rise-5" style={{
+          color: "var(--ink-muted)",
+          fontSize: 12.5,
+          textAlign: "center",
+          marginBottom: 4,
+        }}>
+          <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Save</strong> stores your settings and updates the schedule.{" "}
+          <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Run now</strong> generates a report and emails it immediately.
+        </div>
+
         {/* Floating action dock */}
-        <div className="glass rise rise-5" style={{
+        <div className="glass rise rise-6" style={{
           position: "fixed",
           left: "50%",
           bottom: 24,
           transform: "translateX(-50%)",
           width: "calc(100% - 40px)",
-          maxWidth: 940,
+          maxWidth: 880,
           padding: "14px 18px 14px 22px",
           borderRadius: "var(--radius-pill)",
           display: "flex",
@@ -509,7 +560,7 @@ export default function Home() {
                   Saving
                 </>
               ) : (
-                <>Save</>
+                <>Save settings</>
               )}
             </button>
             <button
@@ -522,8 +573,8 @@ export default function Home() {
                   <span className="spin" style={{
                     display: "inline-block",
                     width: 12, height: 12, borderRadius: "50%",
-                    border: "1.5px solid rgba(40,40,80,0.25)",
-                    borderTopColor: "oklch(0.22 0.10 285)",
+                    border: "1.5px solid rgba(0,0,0,0.2)",
+                    borderTopColor: "#000",
                   }} />
                   Running
                 </>
