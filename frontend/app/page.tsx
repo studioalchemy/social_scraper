@@ -514,24 +514,10 @@ export default function Home() {
         </div>
 
         {/* Floating action dock */}
-        <div className="glass rise rise-6" style={{
-          position: "fixed",
-          left: "50%",
-          bottom: 24,
-          transform: "translateX(-50%)",
-          width: "calc(100% - 40px)",
-          maxWidth: 880,
-          padding: "14px 18px 14px 22px",
-          borderRadius: "var(--radius-pill)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 16,
-          zIndex: 50,
-        }}>
-          <div style={{ minWidth: 0, flex: 1 }}>
+        <div className="dock-wrap">
+          <div className="glass dock rise rise-6">
             {saveMsg && (
-              <span style={{
+              <span className="dock-msg" style={{
                 display: "inline-flex",
                 alignItems: "center",
                 gap: 6,
@@ -545,9 +531,7 @@ export default function Home() {
                 {saveMsg}
               </span>
             )}
-          </div>
 
-          <div style={{ display: "flex", gap: 10 }}>
             <button onClick={saveSettings} disabled={saving} className="btn btn-glass">
               {saving ? (
                 <>
@@ -574,7 +558,7 @@ export default function Home() {
                     display: "inline-block",
                     width: 12, height: 12, borderRadius: "50%",
                     border: "1.5px solid rgba(0,0,0,0.2)",
-                    borderTopColor: "#000",
+                    borderTopColor: "var(--accent-ink)",
                   }} />
                   Running
                 </>

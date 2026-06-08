@@ -3,22 +3,29 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Pure black canvas, subtle iOS-style glass */
-  --bg:           #000;
-  --surface-1:    rgba(255, 255, 255, 0.04);
-  --surface-2:    rgba(255, 255, 255, 0.06);
-  --hairline:     rgba(255, 255, 255, 0.08);
+  /* Deep slate-navy canvas with a warm champagne accent.
+     Formal, not corporate — like a private banking dashboard. */
+  --bg:           oklch(0.165 0.018 252);
+  --bg-deep:      oklch(0.135 0.018 252);
+
+  --surface-1:    rgba(255, 255, 255, 0.045);
+  --surface-2:    rgba(255, 255, 255, 0.075);
+  --hairline:     rgba(255, 255, 255, 0.09);
   --hairline-hot: rgba(255, 255, 255, 0.22);
   --highlight:    rgba(255, 255, 255, 0.10);
 
   --ink-bright: rgba(255, 255, 255, 0.96);
-  --ink-soft:   rgba(255, 255, 255, 0.66);
-  --ink-muted:  rgba(255, 255, 255, 0.42);
+  --ink-soft:   rgba(255, 255, 255, 0.68);
+  --ink-muted:  rgba(255, 255, 255, 0.44);
   --ink-faint:  rgba(255, 255, 255, 0.26);
 
-  --success: oklch(0.82 0.16 152);
-  --danger:  oklch(0.72 0.20 28);
-  --warn:    oklch(0.84 0.16 90);
+  /* Warm champagne — single restrained accent, used only for primary CTA */
+  --accent:      oklch(0.86 0.062 82);
+  --accent-ink:  oklch(0.20 0.020 252);
+
+  --success: oklch(0.80 0.13 152);
+  --danger:  oklch(0.74 0.16 28);
+  --warn:    oklch(0.84 0.14 88);
 
   --radius-card:  20px;
   --radius-input: 12px;
@@ -26,6 +33,7 @@
 }
 
 html, body { min-height: 100dvh; }
+html { overflow-x: hidden; }
 
 body {
   background: var(--bg);
@@ -37,27 +45,39 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Faint grain — keeps the black from feeling dead-flat */
+/* Subtle radial vignette toward the page edges — adds depth without color */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  background:
+    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,255,255,0.04), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 50% 100%, var(--bg-deep), transparent 60%);
+}
+
+/* Faint grain */
 .grain {
   position: fixed; inset: 0;
   pointer-events: none;
   z-index: -1;
-  opacity: 0.035;
+  opacity: 0.04;
   mix-blend-mode: screen;
   background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
 }
 
-/* Glass surface — iOS card style: subtle lift, hairline border, top highlight */
+/* Glass surface — iOS card style on tinted slate */
 .glass {
   position: relative;
   background: var(--surface-1);
   border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  backdrop-filter: blur(20px) saturate(140%);
-  -webkit-backdrop-filter: blur(20px) saturate(140%);
+  backdrop-filter: blur(22px) saturate(160%);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
   box-shadow:
     0 1px 0 0 var(--highlight) inset,
-    0 0 0 1px rgba(0, 0, 0, 0.4);
+    0 0 0 1px rgba(0, 0, 0, 0.35);
 }
 .glass::before {
   content: '';
@@ -67,7 +87,7 @@ body {
   pointer-events: none;
   background: linear-gradient(
     180deg,
-    rgba(255,255,255,0.06) 0%,
+    rgba(255,255,255,0.07) 0%,
     rgba(255,255,255,0) 30%,
     rgba(255,255,255,0) 100%
   );
@@ -96,14 +116,15 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 7px;
   border: none;
   cursor: pointer;
   font: inherit; font-size: 14px; font-weight: 500;
-  padding: 11px 20px;
+  padding: 10px 18px;
   border-radius: var(--radius-pill);
   letter-spacing: -0.005em;
   white-space: nowrap;
+  flex-shrink: 0;
   transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
               background 200ms ease,
               border-color 200ms ease;
@@ -124,15 +145,17 @@ body {
 }
 
 .btn-primary {
-  background: rgba(255, 255, 255, 0.94);
-  color: #000;
+  background: var(--accent);
+  color: var(--accent-ink);
   font-weight: 600;
-  padding: 11px 22px;
+  padding: 10px 20px;
   box-shadow:
-    0 1px 0 0 rgba(255, 255, 255, 0.95) inset,
-    0 0 0 1px rgba(255, 255, 255, 0.4);
+    0 1px 0 0 rgba(255, 240, 210, 0.85) inset,
+    0 0 0 1px rgba(255, 240, 210, 0.40);
 }
-.btn-primary:hover:not(:disabled) { background: rgba(255, 255, 255, 1); }
+.btn-primary:hover:not(:disabled) {
+  background: oklch(0.88 0.06 82);
+}
 
 /* Tag chip */
 .tag-glass {
@@ -175,8 +198,8 @@ body {
   border-radius: var(--radius-pill);
   background: linear-gradient(
     to right,
-    rgba(255, 255, 255, 0.90) 0%,
-    rgba(255, 255, 255, 0.90) var(--fill, 0%),
+    var(--accent) 0%,
+    var(--accent) var(--fill, 0%),
     rgba(255, 255, 255, 0.12) var(--fill, 0%),
     rgba(255, 255, 255, 0.12) 100%
   );
@@ -191,7 +214,7 @@ body {
   border: 1px solid rgba(255, 255, 255, 0.5);
   cursor: pointer;
   box-shadow:
-    0 2px 6px rgba(0,0,0,0.4),
+    0 2px 6px rgba(0,0,0,0.45),
     0 0 0 4px rgba(255,255,255,0.04);
   transition: transform 220ms cubic-bezier(0.2,0.8,0.2,1);
 }
@@ -238,9 +261,44 @@ body {
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 
+/* Floating dock — centered via wrapper, never overflows */
+.dock-wrap {
+  position: fixed;
+  left: 0; right: 0;
+  bottom: 24px;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+  z-index: 50;
+  padding: 0 20px;
+}
+.dock {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 880px;
+  padding: 11px 14px 11px 22px;
+  border-radius: var(--radius-pill);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+.dock-msg {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.001ms !important;
     transition-duration: 0.001ms !important;
   }
+}
+
+@media (max-width: 520px) {
+  .dock { padding: 10px 12px 10px 18px; }
+  .btn { padding: 9px 14px; font-size: 13.5px; }
 }
