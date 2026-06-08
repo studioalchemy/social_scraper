@@ -65,7 +65,7 @@ function IconAlert(props: React.SVGProps<SVGSVGElement>) {
 
 function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   return (
-    <span className="tag-glass">
+    <span className="tag">
       {label}
       <button onClick={onRemove} aria-label={`Remove ${label}`}>
         <IconX />
@@ -74,30 +74,13 @@ function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
   );
 }
 
-function GlassCard({
-  children,
-  className = "",
-  style,
-}: {
-  children: React.ReactNode;
-  className?: string;
-  style?: React.CSSProperties;
-}) {
-  return (
-    <section className={`glass ${className}`} style={{ padding: 26, ...style }}>
-      {children}
-    </section>
-  );
-}
-
-function FieldLabel({ children }: { children: React.ReactNode }) {
+function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
       color: "var(--ink-muted)",
-      fontSize: 12,
+      fontSize: 13,
       fontWeight: 500,
-      marginBottom: 8,
-      letterSpacing: 0.1,
+      marginBottom: 10,
     }}>
       {children}
     </div>
@@ -181,6 +164,14 @@ export default function Home() {
     };
 
   const saveSettings = async () => {
+    const ok = window.confirm(
+      `Save these settings?\n\n` +
+      `• ${settings.accounts.length} account${settings.accounts.length === 1 ? "" : "s"}\n` +
+      `• ${settings.recipient_emails.length} recipient${settings.recipient_emails.length === 1 ? "" : "s"}\n` +
+      `• Every ${settings.schedule_days} ${settings.schedule_days === 1 ? "day" : "days"}`
+    );
+    if (!ok) return;
+
     setSaving(true);
     setSaveMsg(null);
     try {
@@ -190,7 +181,7 @@ export default function Home() {
         body: JSON.stringify(settings),
       });
       if (res.ok) {
-        setSaveMsg("Saved");
+        setSaveMsg("Settings updated");
       } else {
         const err = await res.json();
         setSaveMsg(`Error: ${err.detail ?? "unknown error"}`);
@@ -199,7 +190,7 @@ export default function Home() {
       setSaveMsg("Could not reach backend");
     } finally {
       setSaving(false);
-      setTimeout(() => setSaveMsg(null), 3000);
+      setTimeout(() => setSaveMsg(null), 3500);
     }
   };
 
@@ -228,82 +219,54 @@ export default function Home() {
 
   const statusMeta =
     status.status === "running"
-      ? { color: "var(--warn)",   label: "Running" }
+      ? { color: "var(--warn)",     label: "Running" }
       : status.status === "success"
-      ? { color: "var(--success)", label: "Last run succeeded" }
+      ? { color: "var(--success)",  label: "Last run succeeded" }
       : status.status === "error"
-      ? { color: "var(--danger)",  label: "Last run failed" }
+      ? { color: "var(--danger)",   label: "Last run failed" }
       : { color: "var(--ink-muted)", label: "Idle" };
 
   if (loading) {
     return (
-      <>
-        <div className="grain" />
-        <div style={{
-          display: "flex", alignItems: "center", justifyContent: "center",
-          minHeight: "100dvh",
-        }}>
-          <div className="glass" style={{
-            padding: "28px 40px", display: "flex", alignItems: "center", gap: 14,
-          }}>
-            <div className="spin" style={{
-              width: 16, height: 16, borderRadius: "50%",
-              border: "2px solid rgba(255,255,255,0.18)",
-              borderTopColor: "rgba(255,255,255,0.95)",
-            }} />
-            <span style={{ color: "var(--ink-soft)" }}>Loading</span>
-          </div>
-        </div>
-      </>
+      <div style={{
+        display: "flex", alignItems: "center", justifyContent: "center",
+        minHeight: "100dvh",
+      }}>
+        <div className="spin" style={{
+          width: 22, height: 22, borderRadius: "50%",
+          border: "2px solid rgba(255,255,255,0.15)",
+          borderTopColor: "rgba(255,255,255,0.95)",
+        }} />
+      </div>
     );
   }
 
   const fillPct = ((settings.schedule_days - 1) / 29) * 100;
 
   return (
-    <>
-      <div className="grain" />
-
-      <main style={{
-        maxWidth: 920,
-        margin: "0 auto",
-        padding: "56px 22px 160px",
-      }}>
-        {/* Header */}
-        <header className="rise rise-1" style={{
+    <main style={{
+      maxWidth: 980,
+      margin: "0 auto",
+      padding: "72px 24px 160px",
+    }}>
+      {/* Hero header */}
+      <header className="rise rise-1" style={{ marginBottom: 56 }}>
+        <div style={{
           display: "flex",
-          alignItems: "flex-end",
+          alignItems: "center",
           justifyContent: "space-between",
-          gap: 16,
-          marginBottom: 32,
+          gap: 12,
+          marginBottom: 18,
           flexWrap: "wrap",
         }}>
-          <div>
-            <h1 style={{
-              fontSize: "clamp(2.1rem, 4.8vw, 3rem)",
-              fontWeight: 600,
-              letterSpacing: "-0.03em",
-              lineHeight: 1.05,
-              color: "var(--ink-bright)",
-            }}>
-              Instagram trend agent
-            </h1>
-            <p style={{
-              color: "var(--ink-soft)",
-              marginTop: 10,
-              fontSize: 14.5,
-              maxWidth: "62ch",
-            }}>
-              Watch a set of competitors. A written report and the top posts get emailed to you on the cadence you set.
-            </p>
-          </div>
-
-          <div className="glass" style={{
+          <Eyebrow>Trend Agent</Eyebrow>
+          <div style={{
             display: "inline-flex",
             alignItems: "center",
-            gap: 10,
-            padding: "9px 16px",
-            borderRadius: "var(--radius-pill)",
+            gap: 8,
+            color: "var(--ink-soft)",
+            fontSize: 13,
+            fontWeight: 500,
           }}>
             <span className={status.status === "running" ? "pulse-dot" : ""}
               style={{
@@ -313,264 +276,288 @@ export default function Home() {
                 position: "relative",
               }}
             />
-            <span style={{ color: "var(--ink-bright)", fontSize: 13, fontWeight: 500 }}>
-              {statusMeta.label}
-            </span>
+            {statusMeta.label}
           </div>
-        </header>
+        </div>
 
-        {/* Error banner — prominent at top */}
-        {status.last_error && (
-          <div className="glass rise rise-2" style={{
-            padding: "14px 18px",
-            marginBottom: 20,
-            display: "flex",
-            alignItems: "flex-start",
-            gap: 12,
-            borderColor: "rgba(255, 120, 120, 0.30)",
-            background: "rgba(255, 80, 80, 0.06)",
-          }}>
-            <span style={{
-              color: "var(--danger)",
-              marginTop: 2,
-              flexShrink: 0,
-            }}>
-              <IconAlert />
-            </span>
-            <div style={{ minWidth: 0, flex: 1 }}>
-              <div style={{
-                color: "rgba(255, 200, 200, 0.96)",
-                fontSize: 13.5,
-                fontWeight: 500,
-                marginBottom: 2,
-              }}>
-                Last run failed
-              </div>
-              <div style={{
-                color: "rgba(255, 200, 200, 0.78)",
-                fontSize: 13,
-                wordBreak: "break-word",
-              }}>
-                {status.last_error}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Hero: Cadence */}
-        <GlassCard className="rise rise-2" style={{
-          padding: "32px 34px",
-          marginBottom: 20,
+        <h1 className="display" style={{
+          fontSize: "clamp(3rem, 7.5vw, 5.4rem)",
+          color: "var(--ink-bright)",
+          marginBottom: 18,
         }}>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "minmax(0, 1fr) auto",
-            gap: 32,
-            alignItems: "center",
+          Watch competitors.<br />
+          Get a report.
+        </h1>
+        <p style={{
+          color: "var(--ink-soft)",
+          fontSize: "clamp(1.05rem, 1.4vw, 1.2rem)",
+          fontWeight: 400,
+          lineHeight: 1.45,
+          maxWidth: "60ch",
+          letterSpacing: "-0.01em",
+        }}>
+          A written analysis and the top-performing posts from a set of Instagram accounts, emailed to you on the cadence you set.
+        </p>
+      </header>
+
+      {/* Error banner */}
+      {status.last_error && (
+        <div className="surface rise rise-2" style={{
+          padding: "18px 22px",
+          marginBottom: 28,
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 14,
+          background: "rgba(255, 69, 58, 0.10)",
+          border: "1px solid rgba(255, 69, 58, 0.30)",
+        }}>
+          <span style={{
+            color: "var(--danger)",
+            marginTop: 2,
+            flexShrink: 0,
           }}>
-            <div>
-              <FieldLabel>Cadence</FieldLabel>
-              <div style={{
-                fontSize: "clamp(1.9rem, 4vw, 2.6rem)",
-                fontWeight: 600,
-                letterSpacing: "-0.025em",
-                lineHeight: 1.0,
-                color: "var(--ink-bright)",
-                marginBottom: 6,
-              }}>
-                Every {settings.schedule_days} {settings.schedule_days === 1 ? "day" : "days"}
-              </div>
-              <div style={{ color: "var(--ink-soft)", fontSize: 13.5 }}>
-                Last run · {formatDate(status.last_run)}
-              </div>
-            </div>
-
+            <IconAlert />
+          </span>
+          <div style={{ minWidth: 0, flex: 1 }}>
             <div style={{
-              fontSize: 96,
-              lineHeight: 0.9,
-              fontWeight: 200,
               color: "var(--ink-bright)",
-              letterSpacing: "-0.06em",
-              textAlign: "right",
-              minWidth: 90,
-              fontVariantNumeric: "tabular-nums",
+              fontSize: 15,
+              fontWeight: 600,
+              marginBottom: 4,
             }}>
-              {settings.schedule_days}
+              Last run failed
             </div>
-          </div>
-
-          <div style={{ marginTop: 24 }}>
-            <input
-              type="range"
-              min={1}
-              max={30}
-              value={settings.schedule_days}
-              onChange={(e) =>
-                setSettings((s) => ({ ...s, schedule_days: Number(e.target.value) }))
-              }
-              className="slider-glass"
-              style={{ "--fill": `${fillPct}%` } as React.CSSProperties}
-              aria-label="Schedule frequency in days"
-            />
             <div style={{
-              display: "flex", justifyContent: "space-between",
-              color: "var(--ink-muted)", fontSize: 12, marginTop: 10,
+              color: "var(--ink-soft)",
+              fontSize: 14,
+              wordBreak: "break-word",
             }}>
-              <span>Daily</span>
-              <span>Weekly</span>
-              <span>Monthly</span>
+              {status.last_error}
             </div>
           </div>
-        </GlassCard>
+        </div>
+      )}
 
-        {/* Two-col forms */}
+      {/* Cadence hero card */}
+      <section className="surface rise rise-2" style={{
+        padding: "40px 44px",
+        marginBottom: 24,
+      }}>
+        <Eyebrow>Cadence</Eyebrow>
+
         <div style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-          gap: 20,
-          marginBottom: 20,
+          gridTemplateColumns: "minmax(0, 1fr) auto",
+          gap: 32,
+          alignItems: "end",
+          marginBottom: 28,
         }}>
-          {/* Accounts */}
-          <GlassCard className="rise rise-3">
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink-bright)" }}>
-              Accounts
-            </h2>
-            <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
-              Instagram handles to watch. No @ needed.
-            </p>
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              <input
-                className="input-glass"
-                placeholder="nike"
-                value={accountInput}
-                onChange={(e) => setAccountInput(e.target.value)}
-                onKeyDown={handleKeyDown(addAccount)}
-              />
-              <button onClick={addAccount} className="btn btn-glass" aria-label="Add account">
-                <IconPlus /> Add
-              </button>
+          <div>
+            <div className="display" style={{
+              fontSize: "clamp(2.2rem, 5vw, 3.4rem)",
+              color: "var(--ink-bright)",
+            }}>
+              Every {settings.schedule_days} {settings.schedule_days === 1 ? "day" : "days"}
             </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
-              {settings.accounts.length === 0 ? (
-                <span style={{ color: "var(--ink-muted)", fontSize: 13.5 }}>
-                  No accounts yet
-                </span>
-              ) : (
-                settings.accounts.map((a) => (
-                  <Tag key={a} label={`@${a}`} onRemove={() => removeAccount(a)} />
-                ))
-              )}
+            <div style={{
+              color: "var(--ink-soft)",
+              fontSize: 14.5,
+              marginTop: 10,
+            }}>
+              Last run · {formatDate(status.last_run)}
             </div>
-          </GlassCard>
+          </div>
 
-          {/* Emails */}
-          <GlassCard className="rise rise-4">
-            <h2 style={{ fontSize: 16, fontWeight: 600, color: "var(--ink-bright)" }}>
-              Recipients
-            </h2>
-            <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
-              Where the report email lands.
-            </p>
-
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              <input
-                className="input-glass"
-                placeholder="team@company.com"
-                type="email"
-                value={emailInput}
-                onChange={(e) => setEmailInput(e.target.value)}
-                onKeyDown={handleKeyDown(addEmail)}
-              />
-              <button onClick={addEmail} className="btn btn-glass" aria-label="Add recipient">
-                <IconPlus /> Add
-              </button>
-            </div>
-
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
-              {settings.recipient_emails.length === 0 ? (
-                <span style={{ color: "var(--ink-muted)", fontSize: 13.5 }}>
-                  No recipients yet
-                </span>
-              ) : (
-                settings.recipient_emails.map((e) => (
-                  <Tag key={e} label={e} onRemove={() => removeEmail(e)} />
-                ))
-              )}
-            </div>
-          </GlassCard>
-        </div>
-
-        {/* Hint card explaining the buttons */}
-        <div className="rise rise-5" style={{
-          color: "var(--ink-muted)",
-          fontSize: 12.5,
-          textAlign: "center",
-          marginBottom: 4,
-        }}>
-          <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Save</strong> stores your settings and updates the schedule.{" "}
-          <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Run now</strong> generates a report and emails it immediately.
-        </div>
-
-        {/* Floating action dock */}
-        <div className="dock-wrap">
-          <div className="glass dock rise rise-6">
-            {saveMsg && (
-              <span className="dock-msg" style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: 6,
-                color: saveMsg.startsWith("Error") || saveMsg.startsWith("Could")
-                  ? "var(--danger)"
-                  : "var(--success)",
-                fontSize: 13.5,
-                fontWeight: 500,
-              }}>
-                {!saveMsg.startsWith("Error") && !saveMsg.startsWith("Could") && <IconCheck />}
-                {saveMsg}
-              </span>
-            )}
-
-            <button onClick={saveSettings} disabled={saving} className="btn btn-glass">
-              {saving ? (
-                <>
-                  <span className="spin" style={{
-                    display: "inline-block",
-                    width: 12, height: 12, borderRadius: "50%",
-                    border: "1.5px solid rgba(255,255,255,0.3)",
-                    borderTopColor: "rgba(255,255,255,0.95)",
-                  }} />
-                  Saving
-                </>
-              ) : (
-                <>Save settings</>
-              )}
-            </button>
-            <button
-              onClick={runNow}
-              disabled={status.running}
-              className="btn btn-primary"
-            >
-              {status.running ? (
-                <>
-                  <span className="spin" style={{
-                    display: "inline-block",
-                    width: 12, height: 12, borderRadius: "50%",
-                    border: "1.5px solid rgba(0,0,0,0.2)",
-                    borderTopColor: "var(--accent-ink)",
-                  }} />
-                  Running
-                </>
-              ) : (
-                <>
-                  <IconPlay /> Run now
-                </>
-              )}
-            </button>
+          <div style={{
+            fontSize: "clamp(70px, 11vw, 124px)",
+            lineHeight: 0.85,
+            fontWeight: 200,
+            color: "var(--ink-bright)",
+            letterSpacing: "-0.07em",
+            textAlign: "right",
+            minWidth: 100,
+            fontVariantNumeric: "tabular-nums",
+          }}>
+            {settings.schedule_days}
           </div>
         </div>
-      </main>
-    </>
+
+        <input
+          type="range"
+          min={1}
+          max={30}
+          value={settings.schedule_days}
+          onChange={(e) =>
+            setSettings((s) => ({ ...s, schedule_days: Number(e.target.value) }))
+          }
+          className="slider"
+          style={{ "--fill": `${fillPct}%` } as React.CSSProperties}
+          aria-label="Schedule frequency in days"
+        />
+        <div style={{
+          display: "flex", justifyContent: "space-between",
+          color: "var(--ink-muted)", fontSize: 12.5, marginTop: 12,
+          fontWeight: 500,
+        }}>
+          <span>Daily</span>
+          <span>Weekly</span>
+          <span>Monthly</span>
+        </div>
+      </section>
+
+      {/* Two-col forms */}
+      <div style={{
+        display: "grid",
+        gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+        gap: 22,
+        marginBottom: 36,
+      }}>
+        <section className="surface rise rise-3" style={{ padding: "32px 32px" }}>
+          <h2 className="display" style={{
+            fontSize: 24,
+            color: "var(--ink-bright)",
+            marginBottom: 6,
+          }}>
+            Accounts
+          </h2>
+          <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 22 }}>
+            Instagram handles to watch. No @ needed.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            <input
+              className="input-field"
+              placeholder="nike"
+              value={accountInput}
+              onChange={(e) => setAccountInput(e.target.value)}
+              onKeyDown={handleKeyDown(addAccount)}
+            />
+            <button onClick={addAccount} className="btn btn-ghost" aria-label="Add account">
+              <IconPlus /> Add
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+            {settings.accounts.length === 0 ? (
+              <span style={{ color: "var(--ink-muted)", fontSize: 14 }}>
+                No accounts yet
+              </span>
+            ) : (
+              settings.accounts.map((a) => (
+                <Tag key={a} label={`@${a}`} onRemove={() => removeAccount(a)} />
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="surface rise rise-4" style={{ padding: "32px 32px" }}>
+          <h2 className="display" style={{
+            fontSize: 24,
+            color: "var(--ink-bright)",
+            marginBottom: 6,
+          }}>
+            Recipients
+          </h2>
+          <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 22 }}>
+            Where the report email lands.
+          </p>
+
+          <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+            <input
+              className="input-field"
+              placeholder="team@company.com"
+              type="email"
+              value={emailInput}
+              onChange={(e) => setEmailInput(e.target.value)}
+              onKeyDown={handleKeyDown(addEmail)}
+            />
+            <button onClick={addEmail} className="btn btn-ghost" aria-label="Add recipient">
+              <IconPlus /> Add
+            </button>
+          </div>
+
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+            {settings.recipient_emails.length === 0 ? (
+              <span style={{ color: "var(--ink-muted)", fontSize: 14 }}>
+                No recipients yet
+              </span>
+            ) : (
+              settings.recipient_emails.map((e) => (
+                <Tag key={e} label={e} onRemove={() => removeEmail(e)} />
+              ))
+            )}
+          </div>
+        </section>
+      </div>
+
+      {/* Hint line */}
+      <div className="rise rise-5" style={{
+        color: "var(--ink-muted)",
+        fontSize: 13,
+        textAlign: "center",
+        marginBottom: 4,
+      }}>
+        <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Save settings</strong> stores changes and updates the schedule.{" "}
+        <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Run now</strong> generates a report and emails it immediately.
+      </div>
+
+      {/* Floating action dock */}
+      <div className="dock-wrap">
+        <div className="dock rise rise-6">
+          {saveMsg && (
+            <span className="dock-msg" style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
+              color: saveMsg.startsWith("Error") || saveMsg.startsWith("Could")
+                ? "var(--danger)"
+                : "var(--success)",
+              fontSize: 13.5,
+              fontWeight: 500,
+            }}>
+              {!saveMsg.startsWith("Error") && !saveMsg.startsWith("Could") && <IconCheck />}
+              {saveMsg}
+            </span>
+          )}
+
+          <button onClick={saveSettings} disabled={saving} className="btn btn-ghost">
+            {saving ? (
+              <>
+                <span className="spin" style={{
+                  display: "inline-block",
+                  width: 12, height: 12, borderRadius: "50%",
+                  border: "1.5px solid rgba(255,255,255,0.3)",
+                  borderTopColor: "rgba(255,255,255,0.95)",
+                }} />
+                Saving
+              </>
+            ) : (
+              <>Save settings</>
+            )}
+          </button>
+          <button
+            onClick={runNow}
+            disabled={status.running}
+            className="btn btn-primary"
+          >
+            {status.running ? (
+              <>
+                <span className="spin" style={{
+                  display: "inline-block",
+                  width: 12, height: 12, borderRadius: "50%",
+                  border: "1.5px solid rgba(0,0,0,0.2)",
+                  borderTopColor: "#000",
+                }} />
+                Running
+              </>
+            ) : (
+              <>
+                <IconPlay /> Run now
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </main>
   );
 }

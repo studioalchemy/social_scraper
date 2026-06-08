@@ -1,33 +1,26 @@
-@import url('https://fonts.googleapis.com/css2?family=Geist:wght@200;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Onest:wght@200;300;400;500;600;700;800;900&display=swap');
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Deep slate-navy canvas with a warm champagne accent.
-     Formal, not corporate — like a private banking dashboard. */
-  --bg:           oklch(0.165 0.018 252);
-  --bg-deep:      oklch(0.135 0.018 252);
-
-  --surface-1:    rgba(255, 255, 255, 0.045);
-  --surface-2:    rgba(255, 255, 255, 0.075);
-  --hairline:     rgba(255, 255, 255, 0.09);
+  /* Apple.com dark — near-pure black canvas, solid charcoal surfaces */
+  --bg:           #000;
+  --surface-1:    #1d1d1f;   /* Apple's signature card charcoal */
+  --surface-2:    #2a2a2c;
+  --hairline:     rgba(255, 255, 255, 0.08);
   --hairline-hot: rgba(255, 255, 255, 0.22);
-  --highlight:    rgba(255, 255, 255, 0.10);
 
-  --ink-bright: rgba(255, 255, 255, 0.96);
-  --ink-soft:   rgba(255, 255, 255, 0.68);
-  --ink-muted:  rgba(255, 255, 255, 0.44);
-  --ink-faint:  rgba(255, 255, 255, 0.26);
+  --ink-bright: #f5f5f7;     /* Apple white */
+  --ink-soft:   #a1a1a6;     /* Apple secondary gray */
+  --ink-muted:  #6e6e73;     /* Apple tertiary gray */
+  --ink-faint:  #48484a;
 
-  /* Warm champagne — single restrained accent, used only for primary CTA */
-  --accent:      oklch(0.86 0.062 82);
-  --accent-ink:  oklch(0.20 0.020 252);
+  --accent-blue: #2997ff;    /* Apple link blue */
+  --success: #30d158;
+  --danger:  #ff453a;
+  --warn:    #ff9f0a;
 
-  --success: oklch(0.80 0.13 152);
-  --danger:  oklch(0.74 0.16 28);
-  --warn:    oklch(0.84 0.14 88);
-
-  --radius-card:  20px;
+  --radius-card:  18px;
   --radius-input: 12px;
   --radius-pill:  999px;
 }
@@ -38,80 +31,48 @@ html { overflow-x: hidden; }
 body {
   background: var(--bg);
   color: var(--ink-bright);
-  font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-family: 'Onest', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
   font-size: 15px;
-  line-height: 1.55;
+  line-height: 1.5;
+  letter-spacing: -0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Subtle radial vignette toward the page edges — adds depth without color */
-body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  background:
-    radial-gradient(ellipse 80% 60% at 50% 0%, rgba(255,255,255,0.04), transparent 60%),
-    radial-gradient(ellipse 80% 60% at 50% 100%, var(--bg-deep), transparent 60%);
+/* Display utility — for hero headings */
+.display {
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 0.98;
+  text-wrap: balance;
 }
 
-/* Faint grain */
-.grain {
-  position: fixed; inset: 0;
-  pointer-events: none;
-  z-index: -1;
-  opacity: 0.04;
-  mix-blend-mode: screen;
-  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
-}
-
-/* Glass surface — iOS card style on tinted slate */
-.glass {
-  position: relative;
+/* Solid surface — the only card style. No blur, no glass. */
+.surface {
   background: var(--surface-1);
-  border: 1px solid var(--hairline);
   border-radius: var(--radius-card);
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  box-shadow:
-    0 1px 0 0 var(--highlight) inset,
-    0 0 0 1px rgba(0, 0, 0, 0.35);
-}
-.glass::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  pointer-events: none;
-  background: linear-gradient(
-    180deg,
-    rgba(255,255,255,0.07) 0%,
-    rgba(255,255,255,0) 30%,
-    rgba(255,255,255,0) 100%
-  );
 }
 
 /* Inputs */
-.input-glass {
+.input-field {
   width: 100%;
-  background: rgba(255, 255, 255, 0.04);
+  background: #161618;
   border: 1px solid var(--hairline);
   border-radius: var(--radius-input);
   color: var(--ink-bright);
-  font: inherit; font-size: 14.5px;
+  font: inherit;
+  font-size: 15px;
   outline: none;
-  padding: 12px 14px;
+  padding: 13px 14px;
   transition: border-color 180ms ease, background 180ms ease;
 }
-.input-glass::placeholder { color: var(--ink-muted); }
-.input-glass:focus {
+.input-field::placeholder { color: var(--ink-muted); }
+.input-field:focus {
   border-color: var(--hairline-hot);
-  background: rgba(255, 255, 255, 0.07);
+  background: #1a1a1c;
 }
 
-/* Buttons */
+/* Buttons — Apple shop style */
 .btn {
   display: inline-flex;
   align-items: center;
@@ -119,66 +80,60 @@ body::before {
   gap: 7px;
   border: none;
   cursor: pointer;
-  font: inherit; font-size: 14px; font-weight: 500;
-  padding: 10px 18px;
+  font: inherit;
+  font-size: 14.5px;
+  font-weight: 500;
+  padding: 11px 22px;
   border-radius: var(--radius-pill);
   letter-spacing: -0.005em;
   white-space: nowrap;
   flex-shrink: 0;
-  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
-              background 200ms ease,
-              border-color 200ms ease;
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background 180ms ease,
+              border-color 180ms ease,
+              opacity 180ms ease;
 }
 .btn:disabled { cursor: not-allowed; opacity: 0.40; }
-.btn:hover:not(:disabled)  { transform: translateY(-1px); }
-.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+.btn:active:not(:disabled) { transform: scale(0.97); }
 
-.btn-glass {
-  background: rgba(255, 255, 255, 0.06);
+/* Secondary — ghost charcoal */
+.btn-ghost {
+  background: transparent;
   color: var(--ink-bright);
-  border: 1px solid var(--hairline);
-  box-shadow: 0 1px 0 0 var(--highlight) inset;
+  border: 1px solid var(--ink-muted);
 }
-.btn-glass:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: var(--hairline-hot);
+.btn-ghost:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--ink-soft);
 }
 
+/* Primary — Apple white pill */
 .btn-primary {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--ink-bright);
+  color: #000;
   font-weight: 600;
-  padding: 10px 20px;
-  box-shadow:
-    0 1px 0 0 rgba(255, 240, 210, 0.85) inset,
-    0 0 0 1px rgba(255, 240, 210, 0.40);
 }
-.btn-primary:hover:not(:disabled) {
-  background: oklch(0.88 0.06 82);
-}
+.btn-primary:hover:not(:disabled) { background: #ffffff; }
 
 /* Tag chip */
-.tag-glass {
+.tag {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--hairline);
+  background: #2a2a2c;
   color: var(--ink-bright);
   padding: 5px 5px 5px 13px;
   border-radius: var(--radius-pill);
   font-size: 13px;
-  transition: background 180ms ease, border-color 180ms ease;
+  font-weight: 500;
+  transition: background 180ms ease;
 }
-.tag-glass:hover {
-  background: rgba(255, 255, 255, 0.10);
-  border-color: var(--hairline-hot);
-}
-.tag-glass button {
+.tag:hover { background: #34343a; }
+.tag button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.08);
   border: none;
   border-radius: 50%;
   width: 20px; height: 20px;
@@ -187,51 +142,48 @@ body::before {
   padding: 0;
   transition: background 180ms ease, color 180ms ease;
 }
-.tag-glass button:hover { background: rgba(255, 255, 255, 0.20); color: var(--ink-bright); }
+.tag button:hover { background: rgba(255, 255, 255, 0.20); color: var(--ink-bright); }
 
-/* Slider */
-.slider-glass {
+/* Slider — Apple-style track + thumb */
+.slider {
   -webkit-appearance: none;
   appearance: none;
   width: 100%;
-  height: 5px;
+  height: 4px;
   border-radius: var(--radius-pill);
   background: linear-gradient(
     to right,
-    var(--accent) 0%,
-    var(--accent) var(--fill, 0%),
-    rgba(255, 255, 255, 0.12) var(--fill, 0%),
-    rgba(255, 255, 255, 0.12) 100%
+    var(--ink-bright) 0%,
+    var(--ink-bright) var(--fill, 0%),
+    #3a3a3c var(--fill, 0%),
+    #3a3a3c 100%
   );
   outline: none;
 }
-.slider-glass::-webkit-slider-thumb {
+.slider::-webkit-slider-thumb {
   -webkit-appearance: none;
   appearance: none;
   width: 22px; height: 22px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.98);
-  border: 1px solid rgba(255, 255, 255, 0.5);
+  background: var(--ink-bright);
   cursor: pointer;
   box-shadow:
-    0 2px 6px rgba(0,0,0,0.45),
-    0 0 0 4px rgba(255,255,255,0.04);
-  transition: transform 220ms cubic-bezier(0.2,0.8,0.2,1);
+    0 1px 3px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.3);
+  transition: transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.slider-glass::-webkit-slider-thumb:hover  { transform: scale(1.12); }
-.slider-glass::-webkit-slider-thumb:active { transform: scale(0.96); }
-.slider-glass::-moz-range-thumb {
+.slider::-webkit-slider-thumb:hover  { transform: scale(1.10); }
+.slider::-webkit-slider-thumb:active { transform: scale(0.94); }
+.slider::-moz-range-thumb {
   width: 22px; height: 22px;
   border-radius: 50%;
-  background: rgba(255,255,255,0.98);
-  border: 1px solid rgba(255,255,255,0.5);
+  background: var(--ink-bright);
+  border: none;
   cursor: pointer;
 }
 
 /* Status pulse */
-.pulse-dot {
-  position: relative;
-}
+.pulse-dot { position: relative; }
 .pulse-dot::after {
   content: '';
   position: absolute; inset: 0;
@@ -246,22 +198,21 @@ body::before {
 
 /* Entrance */
 @keyframes rise {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(12px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.rise   { animation: rise 600ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.rise   { animation: rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
 .rise-1 { animation-delay: 60ms; }
-.rise-2 { animation-delay: 140ms; }
-.rise-3 { animation-delay: 220ms; }
-.rise-4 { animation-delay: 300ms; }
-.rise-5 { animation-delay: 380ms; }
-.rise-6 { animation-delay: 460ms; }
+.rise-2 { animation-delay: 160ms; }
+.rise-3 { animation-delay: 260ms; }
+.rise-4 { animation-delay: 360ms; }
+.rise-5 { animation-delay: 460ms; }
+.rise-6 { animation-delay: 560ms; }
 
-/* Spinner */
 @keyframes spin { to { transform: rotate(360deg); } }
 .spin { animation: spin 0.9s linear infinite; }
 
-/* Floating dock — centered via wrapper, never overflows */
+/* Floating dock — solid charcoal pill */
 .dock-wrap {
   position: fixed;
   left: 0; right: 0;
@@ -276,12 +227,14 @@ body::before {
   pointer-events: auto;
   width: 100%;
   max-width: 880px;
-  padding: 11px 14px 11px 22px;
+  padding: 11px 12px 11px 22px;
   border-radius: var(--radius-pill);
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 14px;
+  background: var(--surface-1);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6);
 }
 .dock-msg {
   flex: 1;
@@ -299,6 +252,6 @@ body::before {
 }
 
 @media (max-width: 520px) {
-  .dock { padding: 10px 12px 10px 18px; }
-  .btn { padding: 9px 14px; font-size: 13.5px; }
+  .dock { padding: 10px 10px 10px 18px; }
+  .btn { padding: 10px 16px; font-size: 13.5px; }
 }
