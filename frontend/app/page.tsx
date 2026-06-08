@@ -17,47 +17,78 @@ interface Status {
   status: "idle" | "running" | "success" | "error";
 }
 
-function Tag({
-  label,
-  onRemove,
-}: {
-  label: string;
-  onRemove: () => void;
-}) {
+/* ── Icons ──────────────────────────────────────────────────────────────── */
+
+function IconX(props: React.SVGProps<SVGSVGElement>) {
   return (
-    <span style={styles.tag}>
+    <svg width="11" height="11" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" {...props}>
+      <path d="M6 6 18 18 M18 6 6 18" />
+    </svg>
+  );
+}
+function IconPlay(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" {...props}>
+      <path d="M7 4.5v15l13-7.5z" />
+    </svg>
+  );
+}
+function IconCheck(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" {...props}>
+      <path d="M5 12 10 17 19 7" />
+    </svg>
+  );
+}
+function IconPlus(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" {...props}>
+      <path d="M12 5v14 M5 12h14" />
+    </svg>
+  );
+}
+
+/* ── Pieces ─────────────────────────────────────────────────────────────── */
+
+function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
+  return (
+    <span className="tag-glass">
       {label}
-      <button
-        onClick={onRemove}
-        style={styles.tagRemove}
-        title={`Remove ${label}`}
-        aria-label={`Remove ${label}`}
-      >
-        ✕
+      <button onClick={onRemove} aria-label={`Remove ${label}`}>
+        <IconX />
       </button>
     </span>
   );
 }
 
-function Card({
-  title,
-  subtitle,
+function GlassCard({
   children,
+  className = "",
+  style,
 }: {
-  title: string;
-  subtitle?: string;
   children: React.ReactNode;
+  className?: string;
+  style?: React.CSSProperties;
 }) {
   return (
-    <div style={styles.card}>
-      <div style={styles.cardHeader}>
-        <h2 style={styles.cardTitle}>{title}</h2>
-        {subtitle && <p style={styles.cardSubtitle}>{subtitle}</p>}
-      </div>
+    <section className={`glass ${className}`} style={{ padding: 26, ...style }}>
+      {children}
+    </section>
+  );
+}
+
+function FieldLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{ color: "var(--ink-soft)", fontSize: 12.5, fontWeight: 500, marginBottom: 6 }}>
       {children}
     </div>
   );
 }
+
+/* ── Page ───────────────────────────────────────────────────────────────── */
 
 export default function Home() {
   const [settings, setSettings] = useState<Settings>({
@@ -82,20 +113,15 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/api/settings`);
       if (res.ok) setSettings(await res.json());
-    } catch {
-      /* backend not reachable yet */
-    } finally {
-      setLoading(false);
-    }
+    } catch { /* backend not reachable yet */ }
+    finally { setLoading(false); }
   }, []);
 
   const fetchStatus = useCallback(async () => {
     try {
       const res = await fetch(`${API}/api/status`);
       if (res.ok) setStatus(await res.json());
-    } catch {
-      /* ignore */
-    }
+    } catch { /* ignore */ }
   }, []);
 
   useEffect(() => {
@@ -103,35 +129,30 @@ export default function Home() {
     fetchStatus();
   }, [fetchSettings, fetchStatus]);
 
-  // Poll status while running
   useEffect(() => {
     if (status.running) {
       pollRef.current = setInterval(fetchStatus, 3000);
-    } else {
-      if (pollRef.current) clearInterval(pollRef.current);
+    } else if (pollRef.current) {
+      clearInterval(pollRef.current);
     }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [status.running, fetchStatus]);
 
   const addAccount = () => {
-    const val = accountInput.trim().replace(/^@/, "").toLowerCase();
-    if (!val || settings.accounts.includes(val)) return;
-    setSettings((s) => ({ ...s, accounts: [...s.accounts, val] }));
+    const v = accountInput.trim().replace(/^@/, "").toLowerCase();
+    if (!v || settings.accounts.includes(v)) return;
+    setSettings((s) => ({ ...s, accounts: [...s.accounts, v] }));
     setAccountInput("");
   };
-
   const removeAccount = (a: string) =>
     setSettings((s) => ({ ...s, accounts: s.accounts.filter((x) => x !== a) }));
 
   const addEmail = () => {
-    const val = emailInput.trim().toLowerCase();
-    if (!val || !val.includes("@") || settings.recipient_emails.includes(val)) return;
-    setSettings((s) => ({ ...s, recipient_emails: [...s.recipient_emails, val] }));
+    const v = emailInput.trim().toLowerCase();
+    if (!v || !v.includes("@") || settings.recipient_emails.includes(v)) return;
+    setSettings((s) => ({ ...s, recipient_emails: [...s.recipient_emails, v] }));
     setEmailInput("");
   };
-
   const removeEmail = (e: string) =>
     setSettings((s) => ({
       ...s,
@@ -153,13 +174,13 @@ export default function Home() {
         body: JSON.stringify(settings),
       });
       if (res.ok) {
-        setSaveMsg("Saved successfully");
+        setSaveMsg("Saved");
       } else {
         const err = await res.json();
         setSaveMsg(`Error: ${err.detail ?? "unknown error"}`);
       }
     } catch {
-      setSaveMsg("Could not reach backend — is it running?");
+      setSaveMsg("Could not reach backend");
     } finally {
       setSaving(false);
       setTimeout(() => setSaveMsg(null), 3000);
@@ -177,7 +198,7 @@ export default function Home() {
         alert(err.detail ?? "Failed to start run.");
       }
     } catch {
-      alert("Could not reach backend — is it running?");
+      alert("Could not reach backend");
     }
   };
 
@@ -189,397 +210,332 @@ export default function Home() {
     }).format(new Date(iso));
   };
 
-  const statusColor =
-    status.status === "success"
-      ? "var(--green)"
-      : status.status === "error"
-      ? "var(--red)"
-      : status.status === "running"
-      ? "var(--gold)"
-      : "var(--text-muted)";
-
-  const statusLabel =
+  const statusMeta =
     status.status === "running"
-      ? "Running…"
+      ? { color: "oklch(0.85 0.14 90)",  label: "Running" }
       : status.status === "success"
-      ? "Last run succeeded"
+      ? { color: "var(--success)",       label: "Last run succeeded" }
       : status.status === "error"
-      ? "Last run failed"
-      : "No runs yet";
+      ? { color: "var(--danger)",        label: "Last run failed" }
+      : { color: "rgba(255,255,255,0.6)", label: "Idle" };
 
   if (loading) {
     return (
-      <div style={styles.loadingWrap}>
-        <div style={styles.loadingDot} />
-      </div>
+      <>
+        <div className="aurora" />
+        <div className="grain" />
+        <div style={{
+          display: "flex", alignItems: "center", justifyContent: "center",
+          minHeight: "100dvh",
+        }}>
+          <div className="glass" style={{
+            padding: "32px 44px", display: "flex", alignItems: "center", gap: 14,
+          }}>
+            <div className="spin" style={{
+              width: 18, height: 18, borderRadius: "50%",
+              border: "2px solid rgba(255,255,255,0.25)",
+              borderTopColor: "rgba(255,255,255,0.95)",
+            }} />
+            <span style={{ color: "var(--ink-soft)" }}>Loading…</span>
+          </div>
+        </div>
+      </>
     );
   }
 
+  const fillPct = ((settings.schedule_days - 1) / 29) * 100;
+
   return (
-    <main style={styles.main}>
-      {/* Header */}
-      <header style={styles.header}>
-        <div>
-          <h1 style={styles.h1}>Instagram Trend Agent</h1>
-          <p style={styles.headerSub}>Competitive analysis on autopilot</p>
-        </div>
-        <div style={styles.statusBadge}>
-          <span style={{ ...styles.statusDot, background: statusColor }} />
-          <span style={{ color: statusColor, fontSize: 13 }}>{statusLabel}</span>
-        </div>
-      </header>
+    <>
+      <div className="aurora" />
+      <div className="grain" />
 
-      <div style={styles.grid}>
-        {/* Accounts */}
-        <Card
-          title="Instagram Accounts"
-          subtitle="Add competitor or category handles to monitor (without @)"
-        >
-          <div style={styles.inputRow}>
-            <input
-              placeholder="e.g. nike"
-              value={accountInput}
-              onChange={(e) => setAccountInput(e.target.value)}
-              onKeyDown={handleKeyDown(addAccount)}
+      <main style={{
+        maxWidth: 980,
+        margin: "0 auto",
+        padding: "56px 22px 140px",
+      }}>
+        {/* Header */}
+        <header className="rise rise-1" style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 44,
+          flexWrap: "wrap",
+        }}>
+          <div>
+            <h1 className="display" style={{
+              fontSize: "clamp(2.4rem, 5vw, 3.6rem)",
+              lineHeight: 1.02,
+              color: "var(--ink-bright)",
+            }}>
+              Instagram trend agent
+            </h1>
+            <p style={{
+              color: "var(--ink-soft)",
+              marginTop: 10,
+              fontSize: 15,
+              maxWidth: 56 + "ch",
+            }}>
+              Watch a set of competitors. Get a written report and the top posts emailed to you on a cadence you set.
+            </p>
+          </div>
+
+          <div className="glass" style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "9px 16px",
+            borderRadius: "var(--radius-pill)",
+          }}>
+            <span className={status.status === "running" ? "pulse-dot" : ""}
+              style={{
+                width: 9, height: 9, borderRadius: "50%",
+                background: statusMeta.color,
+                display: "inline-block",
+                position: "relative",
+              }}
             />
-            <button onClick={addAccount} style={styles.addBtn}>
-              Add
-            </button>
+            <span style={{ color: "var(--ink-bright)", fontSize: 13, fontWeight: 500 }}>
+              {statusMeta.label}
+            </span>
           </div>
-          <div style={styles.tagWrap}>
-            {settings.accounts.length === 0 && (
-              <span style={styles.emptyHint}>No accounts added yet</span>
-            )}
-            {settings.accounts.map((a) => (
-              <Tag key={a} label={`@${a}`} onRemove={() => removeAccount(a)} />
-            ))}
-          </div>
-        </Card>
+        </header>
 
-        {/* Emails */}
-        <Card
-          title="Report Recipients"
-          subtitle="Who receives the HTML report email"
-        >
-          <div style={styles.inputRow}>
-            <input
-              placeholder="e.g. team@company.com"
-              value={emailInput}
-              onChange={(e) => setEmailInput(e.target.value)}
-              onKeyDown={handleKeyDown(addEmail)}
-            />
-            <button onClick={addEmail} style={styles.addBtn}>
-              Add
-            </button>
-          </div>
-          <div style={styles.tagWrap}>
-            {settings.recipient_emails.length === 0 && (
-              <span style={styles.emptyHint}>No recipients added yet</span>
-            )}
-            {settings.recipient_emails.map((e) => (
-              <Tag key={e} label={e} onRemove={() => removeEmail(e)} />
-            ))}
-          </div>
-        </Card>
-
-        {/* Schedule */}
-        <Card
-          title="Report Schedule"
-          subtitle="How often the report is automatically generated and sent"
-        >
-          <div style={styles.scheduleWrap}>
-            <div style={styles.scheduleValue}>
-              Every{" "}
-              <span style={styles.scheduleNum}>{settings.schedule_days}</span>{" "}
-              {settings.schedule_days === 1 ? "day" : "days"}
+        {/* Hero: Schedule */}
+        <GlassCard className="rise rise-2" style={{
+          padding: "34px 36px",
+          marginBottom: 22,
+        }}>
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "minmax(0, 1fr) auto",
+            gap: 32,
+            alignItems: "center",
+          }}>
+            <div>
+              <FieldLabel>Cadence</FieldLabel>
+              <div className="display" style={{
+                fontSize: "clamp(2.2rem, 4.5vw, 3.2rem)",
+                lineHeight: 1.0,
+                color: "var(--ink-bright)",
+                marginBottom: 4,
+              }}>
+                Every {settings.schedule_days} {settings.schedule_days === 1 ? "day" : "days"}
+              </div>
+              <div style={{ color: "var(--ink-soft)", fontSize: 14 }}>
+                Last run: {formatDate(status.last_run)}
+              </div>
             </div>
+
+            <div style={{
+              fontFamily: "'Fraunces', serif",
+              fontSize: 80,
+              lineHeight: 1,
+              color: "rgba(255,255,255,0.92)",
+              fontWeight: 300,
+              fontVariationSettings: '"opsz" 144',
+              letterSpacing: "-0.04em",
+              textAlign: "right",
+              minWidth: 90,
+            }}>
+              {settings.schedule_days}
+            </div>
+          </div>
+
+          <div style={{ marginTop: 26 }}>
             <input
               type="range"
               min={1}
               max={30}
               value={settings.schedule_days}
               onChange={(e) =>
-                setSettings((s) => ({
-                  ...s,
-                  schedule_days: Number(e.target.value),
-                }))
+                setSettings((s) => ({ ...s, schedule_days: Number(e.target.value) }))
               }
-              style={styles.slider}
+              className="slider-glass"
+              style={{ "--fill": `${fillPct}%` } as React.CSSProperties}
+              aria-label="Schedule frequency in days"
             />
-            <div style={styles.sliderLabels}>
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              color: "var(--ink-muted)", fontSize: 12, marginTop: 10,
+            }}>
               <span>Daily</span>
-              <span>Weekly (7)</span>
-              <span>Monthly (30)</span>
+              <span>Weekly</span>
+              <span>Monthly</span>
             </div>
           </div>
-        </Card>
 
-        {/* Status */}
-        <Card title="Run History">
-          <div style={styles.statusGrid}>
-            <div style={styles.statBlock}>
-              <div style={styles.statLabel}>Last successful run</div>
-              <div style={styles.statValue}>{formatDate(status.last_run)}</div>
+          {status.last_error && (
+            <div style={{
+              marginTop: 22,
+              padding: "12px 16px",
+              borderRadius: 12,
+              background: "rgba(255, 90, 90, 0.10)",
+              border: "1px solid rgba(255, 120, 120, 0.30)",
+              color: "rgba(255, 200, 200, 0.95)",
+              fontSize: 13,
+            }}>
+              <strong style={{ fontWeight: 600 }}>Last error: </strong>
+              {status.last_error}
             </div>
-            {status.last_error && (
-              <div style={{ ...styles.statBlock, gridColumn: "1 / -1" }}>
-                <div style={{ ...styles.statLabel, color: "var(--red)" }}>
-                  Last error
-                </div>
-                <div style={{ ...styles.statValue, color: "var(--red)", fontSize: 12 }}>
-                  {status.last_error}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      </div>
-
-      {/* Action bar */}
-      <div style={styles.actionBar}>
-        <div style={styles.actionLeft}>
-          {saveMsg && (
-            <span
-              style={{
-                color: saveMsg.startsWith("Error") ? "var(--red)" : "var(--green)",
-                fontSize: 13,
-              }}
-            >
-              {saveMsg}
-            </span>
           )}
+        </GlassCard>
+
+        {/* Two-col forms */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+          gap: 22,
+          marginBottom: 22,
+        }}>
+          {/* Accounts */}
+          <GlassCard className="rise rise-3">
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: "var(--ink-bright)" }}>
+              Accounts
+            </h2>
+            <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
+              Instagram handles to watch. No @ needed.
+            </p>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <input
+                className="input-glass"
+                placeholder="nike"
+                value={accountInput}
+                onChange={(e) => setAccountInput(e.target.value)}
+                onKeyDown={handleKeyDown(addAccount)}
+              />
+              <button onClick={addAccount} className="btn btn-glass" aria-label="Add account">
+                <IconPlus /> Add
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+              {settings.accounts.length === 0 ? (
+                <span style={{ color: "var(--ink-muted)", fontSize: 13.5 }}>
+                  No accounts yet
+                </span>
+              ) : (
+                settings.accounts.map((a) => (
+                  <Tag key={a} label={`@${a}`} onRemove={() => removeAccount(a)} />
+                ))
+              )}
+            </div>
+          </GlassCard>
+
+          {/* Emails */}
+          <GlassCard className="rise rise-4">
+            <h2 style={{ fontSize: 17, fontWeight: 600, color: "var(--ink-bright)" }}>
+              Recipients
+            </h2>
+            <p style={{ color: "var(--ink-soft)", fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>
+              Where the report email lands.
+            </p>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+              <input
+                className="input-glass"
+                placeholder="team@company.com"
+                type="email"
+                value={emailInput}
+                onChange={(e) => setEmailInput(e.target.value)}
+                onKeyDown={handleKeyDown(addEmail)}
+              />
+              <button onClick={addEmail} className="btn btn-glass" aria-label="Add recipient">
+                <IconPlus /> Add
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+              {settings.recipient_emails.length === 0 ? (
+                <span style={{ color: "var(--ink-muted)", fontSize: 13.5 }}>
+                  No recipients yet
+                </span>
+              ) : (
+                settings.recipient_emails.map((e) => (
+                  <Tag key={e} label={e} onRemove={() => removeEmail(e)} />
+                ))
+              )}
+            </div>
+          </GlassCard>
         </div>
-        <div style={styles.actionRight}>
-          <button onClick={saveSettings} disabled={saving} style={styles.saveBtn}>
-            {saving ? "Saving…" : "Save Settings"}
-          </button>
-          <button onClick={runNow} disabled={status.running} style={styles.runBtn}>
-            {status.running ? (
-              <>
-                <span style={styles.spinner} /> Running…
-              </>
-            ) : (
-              "▶  Run Now"
+
+        {/* Floating action dock */}
+        <div className="glass rise rise-5" style={{
+          position: "fixed",
+          left: "50%",
+          bottom: 24,
+          transform: "translateX(-50%)",
+          width: "calc(100% - 40px)",
+          maxWidth: 940,
+          padding: "14px 18px 14px 22px",
+          borderRadius: "var(--radius-pill)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          zIndex: 50,
+        }}>
+          <div style={{ minWidth: 0, flex: 1 }}>
+            {saveMsg && (
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 6,
+                color: saveMsg.startsWith("Error") || saveMsg.startsWith("Could")
+                  ? "var(--danger)"
+                  : "var(--success)",
+                fontSize: 13.5,
+                fontWeight: 500,
+              }}>
+                {!saveMsg.startsWith("Error") && !saveMsg.startsWith("Could") && <IconCheck />}
+                {saveMsg}
+              </span>
             )}
-          </button>
+          </div>
+
+          <div style={{ display: "flex", gap: 10 }}>
+            <button onClick={saveSettings} disabled={saving} className="btn btn-glass">
+              {saving ? (
+                <>
+                  <span className="spin" style={{
+                    display: "inline-block",
+                    width: 12, height: 12, borderRadius: "50%",
+                    border: "1.5px solid rgba(255,255,255,0.3)",
+                    borderTopColor: "rgba(255,255,255,0.95)",
+                  }} />
+                  Saving
+                </>
+              ) : (
+                <>Save</>
+              )}
+            </button>
+            <button
+              onClick={runNow}
+              disabled={status.running}
+              className="btn btn-primary"
+            >
+              {status.running ? (
+                <>
+                  <span className="spin" style={{
+                    display: "inline-block",
+                    width: 12, height: 12, borderRadius: "50%",
+                    border: "1.5px solid rgba(40,40,80,0.25)",
+                    borderTopColor: "oklch(0.22 0.10 285)",
+                  }} />
+                  Running
+                </>
+              ) : (
+                <>
+                  <IconPlay /> Run now
+                </>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </>
   );
 }
-
-// ── Styles ────────────────────────────────────────────────────────────────────
-
-const styles: Record<string, React.CSSProperties> = {
-  main: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: "40px 20px 80px",
-  },
-  loadingWrap: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    height: "100vh",
-  },
-  loadingDot: {
-    width: 12,
-    height: 12,
-    borderRadius: "50%",
-    background: "var(--gold)",
-    animation: "pulse 1s infinite",
-  },
-  header: {
-    display: "flex",
-    alignItems: "flex-start",
-    justifyContent: "space-between",
-    marginBottom: 36,
-    paddingBottom: 24,
-    borderBottom: "2px solid var(--gold)",
-  },
-  h1: {
-    color: "var(--gold)",
-    fontSize: 26,
-    fontWeight: 700,
-    letterSpacing: 1,
-  },
-  headerSub: {
-    color: "var(--text-muted)",
-    fontSize: 13,
-    marginTop: 4,
-  },
-  statusBadge: {
-    display: "flex",
-    alignItems: "center",
-    gap: 8,
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: 20,
-    padding: "6px 14px",
-    marginTop: 4,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: "50%",
-    flexShrink: 0,
-  },
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "1fr 1fr",
-    gap: 20,
-    marginBottom: 24,
-  },
-  card: {
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius)",
-    padding: 24,
-  },
-  cardHeader: {
-    marginBottom: 18,
-  },
-  cardTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: 600,
-  },
-  cardSubtitle: {
-    color: "var(--text-muted)",
-    fontSize: 12,
-    marginTop: 4,
-  },
-  inputRow: {
-    display: "flex",
-    gap: 8,
-    marginBottom: 14,
-  },
-  addBtn: {
-    background: "var(--gold)",
-    color: "#0f0f0f",
-    flexShrink: 0,
-    fontWeight: 700,
-    padding: "9px 16px",
-  },
-  tagWrap: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: 8,
-    minHeight: 32,
-  },
-  tag: {
-    alignItems: "center",
-    background: "#242424",
-    border: "1px solid var(--border)",
-    borderRadius: 16,
-    color: "var(--gold)",
-    display: "inline-flex",
-    fontSize: 13,
-    gap: 6,
-    padding: "4px 12px",
-  },
-  tagRemove: {
-    background: "none",
-    color: "var(--text-muted)",
-    cursor: "pointer",
-    fontSize: 11,
-    lineHeight: 1,
-    padding: 0,
-    transition: "color 0.15s",
-  },
-  emptyHint: {
-    color: "var(--text-muted)",
-    fontSize: 13,
-    fontStyle: "italic",
-  },
-  scheduleWrap: {
-    display: "flex",
-    flexDirection: "column",
-    gap: 16,
-  },
-  scheduleValue: {
-    color: "var(--text)",
-    fontSize: 16,
-  },
-  scheduleNum: {
-    color: "var(--gold)",
-    fontSize: 28,
-    fontWeight: 700,
-  },
-  slider: {
-    accentColor: "var(--gold)",
-    cursor: "pointer",
-    width: "100%",
-  },
-  sliderLabels: {
-    color: "var(--text-muted)",
-    display: "flex",
-    fontSize: 11,
-    justifyContent: "space-between",
-  },
-  statusGrid: {
-    display: "grid",
-    gap: 16,
-  },
-  statBlock: {
-    background: "#111",
-    borderRadius: 8,
-    padding: "12px 16px",
-  },
-  statLabel: {
-    color: "var(--text-muted)",
-    fontSize: 11,
-    letterSpacing: 1,
-    marginBottom: 4,
-    textTransform: "uppercase",
-  },
-  statValue: {
-    color: "var(--text)",
-    fontSize: 15,
-    fontWeight: 500,
-  },
-  actionBar: {
-    alignItems: "center",
-    background: "var(--surface)",
-    border: "1px solid var(--border)",
-    borderRadius: "var(--radius)",
-    bottom: 24,
-    display: "flex",
-    justifyContent: "space-between",
-    left: "50%",
-    maxWidth: 860,
-    padding: "14px 24px",
-    position: "fixed",
-    transform: "translateX(-50%)",
-    width: "calc(100% - 40px)",
-  },
-  actionLeft: {
-    flex: 1,
-  },
-  actionRight: {
-    display: "flex",
-    gap: 12,
-  },
-  saveBtn: {
-    background: "#2a2a2a",
-    border: "1px solid var(--border-hover)",
-    color: "var(--text)",
-  },
-  runBtn: {
-    alignItems: "center",
-    background: "var(--gold)",
-    color: "#0f0f0f",
-    display: "flex",
-    gap: 8,
-    padding: "9px 22px",
-  },
-  spinner: {
-    animation: "spin 0.8s linear infinite",
-    border: "2px solid #0f0f0f",
-    borderTop: "2px solid transparent",
-    borderRadius: "50%",
-    display: "inline-block",
-    height: 14,
-    width: 14,
-  },
-};

@@ -1,52 +1,320 @@
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Geist:wght@300;400;500;600;700&display=swap');
+
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --border: #2a2a2a;
-  --border-hover: #3a3a3a;
-  --gold: #e8c97e;
-  --gold-dim: #b89a4e;
-  --text: #e0e0e0;
-  --text-muted: #888;
-  --red: #e87e7e;
-  --green: #7ee8a2;
-  --blue: #7ec8e8;
-  --radius: 10px;
+  /* Liquid glass palette */
+  --bg-deep: oklch(0.16 0.06 275);
+  --bg-mid:  oklch(0.22 0.09 285);
+
+  --orb-coral:  oklch(0.74 0.22 28);
+  --orb-violet: oklch(0.55 0.26 295);
+  --orb-azure:  oklch(0.66 0.20 225);
+
+  --glass-bg:          rgba(255, 255, 255, 0.06);
+  --glass-bg-strong:   rgba(255, 255, 255, 0.10);
+  --glass-border:      rgba(255, 255, 255, 0.14);
+  --glass-border-hot:  rgba(255, 255, 255, 0.30);
+  --glass-highlight:   rgba(255, 255, 255, 0.42);
+
+  --ink-bright: rgba(255, 255, 255, 0.96);
+  --ink-soft:   rgba(255, 255, 255, 0.72);
+  --ink-muted:  rgba(255, 255, 255, 0.46);
+
+  --success: oklch(0.82 0.15 152);
+  --danger:  oklch(0.72 0.22 25);
+
+  --radius-card:  24px;
+  --radius-input: 14px;
+  --radius-pill:  999px;
 }
+
+html, body { min-height: 100dvh; }
 
 body {
-  background: var(--bg);
-  color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  font-size: 14px;
-  line-height: 1.5;
-  min-height: 100vh;
+  background: var(--bg-deep);
+  color: var(--ink-bright);
+  font-family: 'Geist', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-input {
-  background: #111;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  color: var(--text);
-  font-size: 14px;
-  outline: none;
-  padding: 9px 12px;
-  transition: border-color 0.15s;
+/* Atmospheric color orbs — the saturated bloom that bleeds through the glass */
+body::before,
+body::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  border-radius: 50%;
+  filter: blur(90px);
+  z-index: -2;
+}
+body::before {
+  width: 70vw; height: 70vw;
+  background: var(--orb-coral);
+  top: -18vw; right: -22vw;
+  opacity: 0.78;
+  animation: drift-a 28s ease-in-out infinite alternate;
+}
+body::after {
+  width: 78vw; height: 78vw;
+  background: var(--orb-violet);
+  bottom: -28vw; left: -28vw;
+  opacity: 0.72;
+  animation: drift-b 34s ease-in-out infinite alternate;
+}
+
+/* Third bloom rendered via a dedicated layer to keep depth */
+.aurora {
+  position: fixed;
+  width: 55vw; height: 55vw;
+  background: var(--orb-azure);
+  filter: blur(100px);
+  border-radius: 50%;
+  top: 40vh; left: 30vw;
+  opacity: 0.45;
+  pointer-events: none;
+  z-index: -2;
+  animation: drift-c 40s ease-in-out infinite alternate;
+}
+
+/* Subtle SVG grain to break the gradient */
+.grain {
+  position: fixed; inset: 0;
+  pointer-events: none;
+  z-index: -1;
+  opacity: 0.07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+@keyframes drift-a {
+  from { transform: translate(0, 0)         scale(1); }
+  to   { transform: translate(-8vw, 10vh)   scale(1.15); }
+}
+@keyframes drift-b {
+  from { transform: translate(0, 0)         scale(1); }
+  to   { transform: translate(12vw, -10vh)  scale(1.12); }
+}
+@keyframes drift-c {
+  from { transform: translate(0, 0)         scale(0.95); }
+  to   { transform: translate(-10vw, -6vh)  scale(1.1); }
+}
+
+/* Display typography — Fraunces variable, soft optical sizing */
+.display {
+  font-family: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  font-variation-settings: "opsz" 144, "SOFT" 50;
+  font-weight: 400;
+  letter-spacing: -0.03em;
+  text-wrap: balance;
+}
+
+/* Glass surface */
+.glass {
+  position: relative;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  box-shadow:
+    0 1px 0 0 var(--glass-highlight) inset,
+    0 20px 60px -20px rgba(0, 0, 0, 0.55),
+    0 8px 24px -8px rgba(0, 0, 0, 0.35);
+  overflow: hidden;
+}
+/* Wet top-edge highlight that sells the glass */
+.glass::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(180deg,
+      rgba(255,255,255,0.10) 0%,
+      rgba(255,255,255,0) 28%,
+      rgba(255,255,255,0) 100%
+    );
+}
+
+/* Inputs */
+.input-glass {
   width: 100%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: var(--radius-input);
+  color: var(--ink-bright);
+  font: inherit; font-size: 14.5px;
+  outline: none;
+  padding: 12px 14px;
+  backdrop-filter: blur(8px);
+  transition: border-color 180ms ease, background 180ms ease;
 }
-input:focus { border-color: var(--gold); }
-input::placeholder { color: var(--text-muted); }
+.input-glass::placeholder { color: var(--ink-muted); }
+.input-glass:focus {
+  border-color: var(--glass-border-hot);
+  background: rgba(255, 255, 255, 0.10);
+}
 
-button {
+/* Buttons */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   border: none;
-  border-radius: 6px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  padding: 9px 18px;
-  transition: opacity 0.15s, transform 0.1s;
+  font: inherit; font-size: 14px; font-weight: 500;
+  padding: 11px 20px;
+  border-radius: var(--radius-pill);
+  letter-spacing: -0.005em;
+  white-space: nowrap;
+  transition: transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+              background 200ms ease,
+              box-shadow 220ms ease,
+              border-color 200ms ease;
 }
-button:hover:not(:disabled) { opacity: 0.85; }
-button:active:not(:disabled) { transform: scale(0.97); }
-button:disabled { cursor: not-allowed; opacity: 0.4; }
+.btn:disabled { cursor: not-allowed; opacity: 0.45; }
+.btn:hover:not(:disabled)  { transform: translateY(-1px); }
+.btn:active:not(:disabled) { transform: translateY(0) scale(0.98); }
+
+.btn-glass {
+  background: rgba(255, 255, 255, 0.10);
+  color: var(--ink-bright);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 0 0 rgba(255, 255, 255, 0.28) inset;
+}
+.btn-glass:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+
+.btn-primary {
+  background: rgba(255, 255, 255, 0.95);
+  color: oklch(0.22 0.10 285);
+  font-weight: 600;
+  padding: 12px 24px;
+  box-shadow:
+    0 1px 0 0 rgba(255, 255, 255, 0.95) inset,
+    0 10px 28px -6px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+.btn-primary:hover:not(:disabled) { background: rgba(255, 255, 255, 1); }
+
+/* Tag chip */
+.tag-glass {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: var(--ink-bright);
+  padding: 5px 5px 5px 13px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  transition: background 180ms ease;
+}
+.tag-glass:hover { background: rgba(255, 255, 255, 0.16); }
+.tag-glass button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  border-radius: 50%;
+  width: 20px; height: 20px;
+  cursor: pointer;
+  color: var(--ink-soft);
+  padding: 0;
+  transition: background 180ms ease, color 180ms ease;
+}
+.tag-glass button:hover { background: rgba(255, 255, 255, 0.24); color: var(--ink-bright); }
+
+/* Slider — custom thumb that looks like a glass marble */
+.slider-glass {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(
+    to right,
+    rgba(255, 255, 255, 0.95) 0%,
+    rgba(255, 255, 255, 0.95) var(--fill, 0%),
+    rgba(255, 255, 255, 0.18) var(--fill, 0%),
+    rgba(255, 255, 255, 0.18) 100%
+  );
+  outline: none;
+}
+.slider-glass::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 35% 30%, rgba(255,255,255,1) 0%, rgba(245,245,250,0.95) 60%);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  box-shadow:
+    0 2px 4px rgba(0,0,0,0.25),
+    0 6px 14px rgba(0,0,0,0.25),
+    0 0 0 4px rgba(255,255,255,0.05);
+  transition: transform 220ms cubic-bezier(0.2,0.8,0.2,1);
+}
+.slider-glass::-webkit-slider-thumb:hover  { transform: scale(1.12); }
+.slider-glass::-webkit-slider-thumb:active { transform: scale(0.96); }
+.slider-glass::-moz-range-thumb {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.98);
+  border: 1px solid rgba(255,255,255,0.6);
+  cursor: pointer;
+}
+
+/* Status pulse */
+.pulse-dot {
+  position: relative;
+}
+.pulse-dot::after {
+  content: '';
+  position: absolute; inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  animation: pulse 1.8s ease-out infinite;
+}
+@keyframes pulse {
+  0%   { transform: scale(1);   opacity: 0.7; }
+  100% { transform: scale(2.6); opacity: 0; }
+}
+
+/* Entrance */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.rise   { animation: rise 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.rise-1 { animation-delay: 60ms; }
+.rise-2 { animation-delay: 140ms; }
+.rise-3 { animation-delay: 220ms; }
+.rise-4 { animation-delay: 300ms; }
+.rise-5 { animation-delay: 380ms; }
+
+/* Spinner for Run Now button */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin { animation: spin 0.9s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  body::before, body::after, .aurora { animation: none !important; }
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* Small screens */
+@media (max-width: 760px) {
+  .display { letter-spacing: -0.02em; }
+}
