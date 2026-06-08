@@ -20,9 +20,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# On Fly.io a persistent volume is mounted at /data; use it when present
-_DATA_DIR = Path("/data") if Path("/data").exists() else Path(".")
-SETTINGS_PATH = _DATA_DIR / "settings.json"
+SETTINGS_PATH = Path("settings.json")
 DEFAULT_SETTINGS = {"accounts": [], "recipient_emails": [], "schedule_days": 7}
 
 _run_state: dict = {
