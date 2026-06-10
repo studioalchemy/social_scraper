@@ -5,6 +5,7 @@ import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -37,6 +38,34 @@ DEFAULT_SETTINGS = {
 # from the user's lookback settings — that's the whole point of this toggle.
 MONTHLY_JOB_ID = "monthly_two_month_report"
 MONTHLY_LOOKBACK_DAYS = 60
+
+# Both scheduled jobs run on IST.
+IST = ZoneInfo("Asia/Kolkata")
+REGULAR_FIRE_HOUR = 9
+REGULAR_FIRE_MINUTE = 30
+MONTHLY_FIRE_HOUR = 10
+MONTHLY_FIRE_MINUTE = 0
+
+MONTHLY_SUBJECT = "Analysis of ITC social scraper Agent — Monthly 2-Month Deep-Dive"
+MONTHLY_FOCUS_DIRECTIVE = """SPECIAL FOCUS — MONTHLY 2-MONTH DEEP-DIVE
+This report spans 60 days of competitor content. Re-weight the standard 7-section structure as follows. Do NOT skip sections, but lean heavier into the items below and pull every claim from concrete numbers in the scraped data.
+
+1. What worked exceptionally well for competitors in the last 2 months — name the specific posts/reels, the format used, and the mechanic (hook style, cultural moment, audio choice, narrative arc) behind the performance.
+2. Trends each competitor is riding successfully — emerging formats (ASMR, POV, BTS, montage), recurring themes, audio choices, visual treatments. Quote the specific posts that prove the trend exists for that competitor.
+3. Growth signals over the window — follower jumps, ER lifts, breakout reels, the strategic reason each one happened (campaign, partnership, format shift, cultural piggy-back). Be concrete: "@x's Reel on [date] hit Y views, K× the account's median — the unlock was Z."
+4. Why specific posts were over-shared / over-saved — analyse share + save + comment-quote signals, not just likes. If comment data shows people tagging friends or quoting captions, call that out as the share driver.
+5. How OUR brand (Section 3 subject — the first account) can improve — give direct, copy-this-tomorrow plays drawn from points 1–4. Each recommendation must name the competitor mechanic it borrows from and the BP it serves.
+
+Section 3 (Own Account Audit) and Section 5 (Recommendations) should be the longest and most concrete sections in this report. Section 2 (Positioning) and Section 6 (Blueprint) stay full but keep the standard depth. Sections 1 and 4 follow the standard template but call out trend evidence in Section 1's per-account Engagement Patterns and in Section 4's Themes / Formats / Visual whitespace bullets."""
+
+
+def _next_fire(hour: int, minute: int) -> datetime:
+    """Next IST datetime at hour:minute that is strictly in the future."""
+    now = datetime.now(IST)
+    candidate = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    return candidate
 
 
 def load_settings() -> dict:
@@ -98,11 +127,18 @@ def _resolve_window(settings: dict) -> tuple[str | None, str | None, str]:
     return since.date().isoformat(), None, f"Last {days} days"
 
 
-def _execute_pipeline(window_override: tuple[str | None, str | None, str] | None = None) -> None:
+def _execute_pipeline(
+    window_override: tuple[str | None, str | None, str] | None = None,
+    subject_override: str | None = None,
+    focus_directive: str | None = None,
+) -> None:
     """Run the full scrape → analyse → email cycle.
 
     If `window_override` is provided it bypasses the user's lookback settings —
     this is how the monthly 2-month deep-dive forces its own fixed window.
+    `subject_override` and `focus_directive` similarly let the monthly run
+    override the email subject and steer the analyst toward competitor-growth
+    framing without touching the regular report.
     """
     load_dotenv(override=True)
     import analyzer
@@ -129,11 +165,16 @@ def _execute_pipeline(window_override: tuple[str | None, str | None, str] | None
         scraped,
         business_problems=business_problems,
         scrape_period=period_label,
+        focus_directive=focus_directive,
     )
-    emailer.send_report(report)
+    emailer.send_report(report, subject=subject_override)
 
 
-def run_pipeline_background(window_override: tuple[str | None, str | None, str] | None = None) -> None:
+def run_pipeline_background(
+    window_override: tuple[str | None, str | None, str] | None = None,
+    subject_override: str | None = None,
+    focus_directive: str | None = None,
+) -> None:
     with _run_lock:
         if _run_state["running"]:
             return
@@ -143,7 +184,11 @@ def run_pipeline_background(window_override: tuple[str | None, str | None, str] 
 
     logger.info("Pipeline started (background)")
     try:
-        _execute_pipeline(window_override=window_override)
+        _execute_pipeline(
+            window_override=window_override,
+            subject_override=subject_override,
+            focus_directive=focus_directive,
+        )
         _run_state["last_run"] = datetime.now().isoformat()
         _run_state["status"] = "success"
         logger.info("Pipeline completed successfully")
@@ -156,11 +201,16 @@ def run_pipeline_background(window_override: tuple[str | None, str | None, str] 
 
 
 def _run_monthly_two_month_report() -> None:
-    """Cron entrypoint for the monthly 2-month deep-dive. Forces a 60-day window
-    regardless of the user's slider settings."""
+    """Cron entrypoint for the monthly 2-month deep-dive. Forces a 60-day window,
+    a distinct subject line, and a competitor-growth-focused analysis brief —
+    independent of the user's slider settings."""
     until = datetime.now(timezone.utc)
     since = until - timedelta(days=MONTHLY_LOOKBACK_DAYS)
-    run_pipeline_background(window_override=(since.date().isoformat(), None, "Last 2 months"))
+    run_pipeline_background(
+        window_override=(since.date().isoformat(), None, "Last 2 months"),
+        subject_override=MONTHLY_SUBJECT,
+        focus_directive=MONTHLY_FOCUS_DIRECTIVE,
+    )
 
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
@@ -176,15 +226,16 @@ def _start_scheduler() -> None:
     settings = load_settings()
     days = settings.get("schedule_days", 7)
 
-    _scheduler = BackgroundScheduler()
+    _scheduler = BackgroundScheduler(timezone=IST)
     _scheduler.add_job(
         run_pipeline_background,
         trigger="interval",
         days=days,
+        start_date=_next_fire(REGULAR_FIRE_HOUR, REGULAR_FIRE_MINUTE),
         id="trend_report",
     )
     _scheduler.start()
-    logger.info(f"Scheduler started: every {days} day(s)")
+    logger.info(f"Scheduler started: every {days} day(s) at 09:30 IST")
 
     # Apply monthly deep-dive job from persisted settings on boot.
     _apply_monthly_job(bool(settings.get("monthly_two_month_report")))
@@ -193,8 +244,13 @@ def _start_scheduler() -> None:
 def _reschedule(days: int) -> None:
     if _scheduler is None:
         return
-    _scheduler.reschedule_job("trend_report", trigger="interval", days=days)
-    logger.info(f"Scheduler updated to every {days} day(s)")
+    _scheduler.reschedule_job(
+        "trend_report",
+        trigger="interval",
+        days=days,
+        start_date=_next_fire(REGULAR_FIRE_HOUR, REGULAR_FIRE_MINUTE),
+    )
+    logger.info(f"Scheduler updated to every {days} day(s) at 09:30 IST")
 
 
 def _apply_monthly_job(enabled: bool) -> None:
@@ -210,10 +266,15 @@ def _apply_monthly_job(enabled: bool) -> None:
     if enabled and existing is None:
         _scheduler.add_job(
             _run_monthly_two_month_report,
-            trigger=CronTrigger(day=1, hour=8, minute=0),  # 1st of every month, 08:00 server time (UTC on Railway)
+            trigger=CronTrigger(
+                day=1,
+                hour=MONTHLY_FIRE_HOUR,
+                minute=MONTHLY_FIRE_MINUTE,
+                timezone=IST,
+            ),
             id=MONTHLY_JOB_ID,
         )
-        logger.info("Monthly 2-month deep-dive: ENABLED (1st of every month, 08:00 UTC)")
+        logger.info("Monthly 2-month deep-dive: ENABLED (1st of every month, 10:00 IST)")
     elif not enabled and existing is not None:
         _scheduler.remove_job(MONTHLY_JOB_ID)
         logger.info("Monthly 2-month deep-dive: DISABLED")

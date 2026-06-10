@@ -207,6 +207,7 @@ def _build_user_message(
     business_problems: list[str],
     scrape_period: str,
     report_month: str,
+    focus_directive: str | None = None,
 ) -> str:
     accounts_list = list(scraped_data.keys())
     primary_handle = accounts_list[0] if accounts_list else ""
@@ -343,7 +344,9 @@ def _build_user_message(
   }
 }"""
 
-    return f"""INPUTS:
+    focus_block = f"\n{focus_directive}\n\n" if focus_directive else ""
+
+    return f"""{focus_block}INPUTS:
 
 BRAND_NAME: derive a pretty name from the first/primary handle @{primary_handle}
 BRAND_CATEGORY: infer from the brand and competitive set
@@ -370,6 +373,7 @@ def analyse(
     scraped_data: dict[str, list[dict]],
     business_problems: list[str] | None = None,
     scrape_period: str | None = None,
+    focus_directive: str | None = None,
 ) -> dict:
     now = datetime.now()
     report_month = now.strftime("%B %Y")
@@ -382,6 +386,7 @@ def analyse(
         business_problems=business_problems or [],
         scrape_period=scrape_period,
         report_month=report_month,
+        focus_directive=focus_directive,
     )
 
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY())

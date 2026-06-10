@@ -69,9 +69,10 @@ function IconAlert(props: React.SVGProps<SVGSVGElement>) {
 
 /* ── Pieces ─────────────────────────────────────────────────────────────── */
 
-function Tag({ label, onRemove }: { label: string; onRemove: () => void }) {
+function Tag({ label, onRemove, marker }: { label: string; onRemove: () => void; marker?: string }) {
   return (
-    <span className="tag">
+    <span className={marker ? "tag tag-primary" : "tag"}>
+      {marker && <span className="tag-marker">{marker}</span>}
       {label}
       <button onClick={onRemove} aria-label={`Remove ${label}`}>
         <IconX />
@@ -631,7 +632,7 @@ export default function Home() {
               fontSize: 14,
               maxWidth: "60ch",
             }}>
-              On top of the schedule above, get one extra report on the 1st of every month covering the last 60 days. Fixed window — the slider above doesn&rsquo;t affect this one.
+              On top of the schedule above, get one extra report on the 1st of every month at 10:00 IST covering the last 60 days. Fixed window — the slider above doesn&rsquo;t affect it. This version focuses on what worked for competitors, the trends they rode, the growth they saw, and how your brand can borrow those plays.
             </p>
           </div>
 
@@ -663,8 +664,20 @@ export default function Home() {
           }}>
             Accounts
           </h2>
-          <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 22 }}>
-            Instagram handles to watch. No @ needed.
+          <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 8 }}>
+            Add the Instagram handles to watch. No @ needed.
+          </p>
+          <p style={{
+            color: "var(--ink-bright)",
+            fontSize: 13.5,
+            fontWeight: 500,
+            marginBottom: 22,
+            padding: "10px 14px",
+            background: "rgba(255, 255, 255, 0.05)",
+            borderRadius: 10,
+            border: "1px solid var(--hairline)",
+          }}>
+            The first handle is <strong>your brand</strong>. Everything you add after that is a competitor we&rsquo;ll benchmark you against.
           </p>
 
           <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
@@ -686,8 +699,13 @@ export default function Home() {
                 No accounts yet
               </span>
             ) : (
-              settings.accounts.map((a) => (
-                <Tag key={a} label={`@${a}`} onRemove={() => removeAccount(a)} />
+              settings.accounts.map((a, i) => (
+                <Tag
+                  key={a}
+                  label={`@${a}`}
+                  onRemove={() => removeAccount(a)}
+                  marker={i === 0 ? "Your brand" : undefined}
+                />
               ))
             )}
           </div>
@@ -790,7 +808,7 @@ export default function Home() {
         textAlign: "center",
         marginBottom: 4,
       }}>
-        <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Save settings</strong> stores changes and updates the schedule.{" "}
+        <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Save settings</strong> stores changes and updates the schedule (regular runs fire at 09:30 IST).{" "}
         <strong style={{ color: "var(--ink-soft)", fontWeight: 500 }}>Run now</strong> generates a report and emails it immediately.
       </div>
 

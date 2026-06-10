@@ -36,7 +36,7 @@ def _docx_filename(report: dict) -> str:
     return f"{safe_brand}_Instagram_Analysis_{date}.docx"
 
 
-def send_report(report: dict) -> None:
+def send_report(report: dict, subject: str | None = None) -> None:
     sender = config.GMAIL_SENDER_EMAIL()
     recipients = config.RECIPIENT_EMAILS()
 
@@ -50,7 +50,7 @@ def send_report(report: dict) -> None:
     )
 
     msg = MIMEMultipart()
-    msg["Subject"] = SUBJECT
+    msg["Subject"] = subject or SUBJECT
     msg["From"] = sender
     msg["To"] = ", ".join(recipients)
     msg.attach(MIMEText(body_text, "plain"))
