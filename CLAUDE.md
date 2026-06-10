@@ -96,6 +96,6 @@ frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
   - `FRONTEND_URL` (Vercel origin, exact match — no trailing slash)
   - `SETTINGS_DIR=/data` (points to the attached Railway volume so `settings.json` persists across redeploys)
   - `API_BEARER_TOKEN` — shared-secret bearer enforced by `require_token` on `/api/settings`, `/api/status`, `/api/run`. If unset, those endpoints return 503. `/api/health` stays open for Railway's monitor.
-- **Vercel**: root directory set to `frontend/`. Needs:
-  - `NEXT_PUBLIC_API_URL` — Railway service URL (must include `https://`, no trailing slash — baked into the JS bundle at build time, so changing it requires a fresh Vercel build).
-  - `NEXT_PUBLIC_API_TOKEN` — must match Railway's `API_BEARER_TOKEN` exactly. Also bundle-baked, so visible in page source; treat as a trivial-attacker deterrent, not a strong secret.
+- **Vercel**: root directory set to `frontend/`. The browser talks to Vercel's own `/api/*` routes (handled by the catch-all proxy at `frontend/app/api/[...path]/route.ts`), which forwards to Railway with the bearer header attached server-side. The browser never sees the backend URL or the token. Required env vars (both PRIVATE — no `NEXT_PUBLIC_` prefix):
+  - `BACKEND_API_URL` — Railway service URL (`https://...`, no trailing slash).
+  - `BACKEND_API_TOKEN` — must exactly match Railway's `API_BEARER_TOKEN`. Stays on Vercel's servers; not bundled.
