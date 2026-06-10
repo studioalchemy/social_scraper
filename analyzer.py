@@ -92,8 +92,102 @@ RULES FOR EVERY REPORT:
 Return ONLY a valid JSON object matching the provided schema. No markdown, no code blocks, just raw JSON. Be specific, data-driven, and use exact numbers from the scraped data."""
 
 
+def _format_account_block(username: str, role: str, data: dict) -> str:
+    profile = data.get("profile") or {}
+    posts = data.get("posts") or []
+    reels = data.get("reels") or []
+    comments_by_post = data.get("comments") or {}
+    tagged = data.get("tagged_posts") or []
+
+    if not (profile or posts or reels or tagged):
+        return f"\n=== @{username} [{role}] ===\nNo data scraped (all actor calls failed or account private)."
+
+    # Profile line
+    p_lines = []
+    if profile:
+        fullname = profile.get("fullName") or profile.get("full_name") or ""
+        biography = (profile.get("biography") or "")[:200].replace("\n", " ")
+        followers = profile.get("followersCount") or profile.get("followers_count") or profile.get("followers")
+        following = profile.get("followsCount") or profile.get("follows_count") or profile.get("following")
+        total_posts = profile.get("postsCount") or profile.get("posts_count") or profile.get("postsCount") or len(posts)
+        verified = profile.get("verified") or profile.get("isVerified") or False
+        category = profile.get("businessCategoryName") or profile.get("category") or ""
+        ext_url = profile.get("externalUrl") or profile.get("external_url") or ""
+        p_lines.append(
+            f"PROFILE: {fullname} | followers={followers} | following={following} | "
+            f"total_posts={total_posts} | verified={verified} | category={category} | url={ext_url}"
+        )
+        if biography:
+            p_lines.append(f"BIO: {biography}")
+
+    # Posts list
+    post_lines = []
+    for p in posts[:25]:
+        views = f", Views: {p['videoViewCount']}" if p.get("videoViewCount") else ""
+        audio = f", Audio: {p['musicInfo']}" if p.get("musicInfo") else ""
+        hashtags = f" | Tags: {', '.join(p.get('hashtags', [])[:5])}" if p.get("hashtags") else ""
+        post_lines.append(
+            f"  - [{p.get('type', '?')}] {p.get('timestamp', '')[:10]} | "
+            f"Likes: {p.get('likesCount', 0)}, Comments: {p.get('commentsCount', 0)}{views}{audio}{hashtags}\n"
+            f"    Caption: {(p.get('caption') or '')[:200]}\n"
+            f"    URL: {p.get('url', '')}"
+        )
+
+    # Reels — only show ones whose engagement signals add information
+    reel_lines = []
+    for r in reels[:10]:
+        reel_lines.append(
+            f"  - Reel {r.get('timestamp', '')[:10]} | Plays: {r.get('playCount', 0)}, "
+            f"Likes: {r.get('likesCount', 0)}, Comments: {r.get('commentsCount', 0)}, "
+            f"Duration: {r.get('duration', 0)}s, Audio: {r.get('musicInfo', '')}\n"
+            f"    Caption: {(r.get('caption') or '')[:160]}"
+        )
+
+    # Comments per post — top-5 posts, top-15 comments each
+    comment_lines = []
+    sorted_posts_for_comments = sorted(
+        posts,
+        key=lambda p: (p.get("likesCount") or 0) + (p.get("commentsCount") or 0),
+        reverse=True,
+    )[:5]
+    for idx, p in enumerate(sorted_posts_for_comments, start=1):
+        cs = comments_by_post.get(p.get("url"), [])
+        if not cs:
+            continue
+        top_cs = sorted(cs, key=lambda c: c.get("likesCount") or 0, reverse=True)[:15]
+        block = [f"  Post #{idx} ({p.get('url', '')}, {p.get('likesCount', 0)} likes):"]
+        for c in top_cs:
+            block.append(f"    @{c.get('ownerUsername', '?')}: {(c.get('text') or '')[:160]}")
+        comment_lines.append("\n".join(block))
+
+    # Tagged posts (UGC mentions)
+    tagged_lines = []
+    for t in tagged[:12]:
+        tagged_lines.append(
+            f"  - @{t.get('ownerUsername', '?')} | Likes: {t.get('likesCount', 0)}, "
+            f"Comments: {t.get('commentsCount', 0)} | Caption: {(t.get('caption') or '')[:140]}"
+        )
+
+    blocks = [f"\n=== @{username} [{role}] ==="]
+    blocks.extend(p_lines)
+    if post_lines:
+        blocks.append(f"\nPOSTS ({len(posts)} fetched, showing top {len(post_lines)}):")
+        blocks.extend(post_lines)
+    if reel_lines:
+        blocks.append(f"\nREELS ({len(reels)} fetched, showing {len(reel_lines)}):")
+        blocks.extend(reel_lines)
+    if comment_lines:
+        blocks.append(f"\nCOMMENTS (top {len(comment_lines)} posts):")
+        blocks.extend(comment_lines)
+    if tagged_lines:
+        blocks.append(f"\nTAGGED / UGC ({len(tagged)} fetched, showing {len(tagged_lines)}):")
+        blocks.extend(tagged_lines)
+
+    return "\n".join(blocks)
+
+
 def _build_user_message(
-    scraped_data: dict[str, list[dict]],
+    scraped_data: dict[str, dict],
     business_problems: list[str],
     scrape_period: str,
     report_month: str,
@@ -104,20 +198,9 @@ def _build_user_message(
     bp_lines = "\n".join(f"BP{i+1}: {p}" for i, p in enumerate(business_problems)) or "(none specified — derive plausible BPs from the brand's posting behaviour)"
 
     accounts_block = []
-    for username, posts in scraped_data.items():
+    for username, data in scraped_data.items():
         role = "PRIMARY BRAND BEING ANALYSED" if username == primary_handle else "competitor / comparable account"
-        if not posts:
-            accounts_block.append(f"\n@{username} [{role}]: No posts scraped (scrape failed or private account)")
-            continue
-        post_lines = []
-        for p in posts:
-            views = f", Views: {p['videoViewCount']}" if p.get("videoViewCount") else ""
-            audio = f", Audio: {p['musicInfo']}" if p.get("musicInfo") else ""
-            post_lines.append(
-                f"  - [{p['type']}] Likes: {p['likesCount']}, Comments: {p['commentsCount']}{views}{audio} | "
-                f"Caption: {p['caption'][:200]} | URL: {p['url']}"
-            )
-        accounts_block.append(f"\n@{username} [{role}] ({len(posts)} posts):\n" + "\n".join(post_lines))
+        accounts_block.append(_format_account_block(username, role, data))
 
     data_block = "\n".join(accounts_block)
 

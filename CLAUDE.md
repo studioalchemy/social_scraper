@@ -54,8 +54,17 @@ frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
 
 **Pipeline data flow:**
 
-1. `scraper.scrape_accounts(accounts)` → `dict[username, list[post_dict]]`  
-   Fixed post schema: `url`, `shortCode`, `caption`, `likesCount`, `commentsCount`, `type`, `musicInfo`, `displayUrl`, `timestamp`, `ownerUsername`, `videoViewCount`.
+1. `scraper.scrape_accounts(accounts)` → `dict[username, account_data]`  
+   For each account, five Apify actors run sequentially:
+   - `apify/instagram-profile-scraper` — followers, following, posts count, verified, bio, category
+   - `apify/instagram-scraper` (`resultsType: posts`, `addParentData: true`, limit 30) — recent posts
+   - `apify/instagram-reel-scraper` (limit 15) — Reels with accurate `playCount`
+   - `apify/instagram-comment-scraper` — comments on the top-5 posts by engagement (30 each)
+   - `apify/instagram-tagged-scraper` — UGC posts where the account is tagged (limit 15)
+
+   Each per-slice scrape is wrapped in try/except so one actor's failure doesn't poison the whole account — partial data is preserved. The returned `account_data` shape is `{username, profile, posts, reels, comments, tagged_posts}` where `comments` is a dict keyed by post URL. Total per pipeline run: 5 actor types × N accounts ≈ 25 actor invocations for a 5-account brief, ~10–15 min real time. Default actor timeouts apply.
+
+   Post / reel / comment / tagged outputs are normalized via the local `_extract_*` helpers so the analyzer doesn't have to know about each actor's raw schema.
 
 2. `analyzer.analyse(scraped_data, business_problems=[...])` → `report_dict`  
    Calls Claude (`claude-sonnet-4-6`, `max_tokens=64000`, streaming via `client.messages.stream` — required because high `max_tokens` can push the request past 10 min). System prompt defines the full 7-section report structure (header, 6 sections, summary, footer). User message embeds the inputs (BRAND_NAME inferred from the **first account's handle**, BRAND_CATEGORY inferred from the set, BUSINESS_PROBLEMS from settings, ACCOUNTS_ANALYSED with the primary brand flagged) and the scraped data block, then ends with a JSON schema Claude must match. Code fences are stripped before `json.loads()`. `_meta` is injected post-parse with the report date, scrape period, accounts count, and posts scraped — `emailer.py` and `report_doc.py` read from it.
