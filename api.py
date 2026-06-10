@@ -46,8 +46,12 @@ MONTHLY_LOOKBACK_DAYS = 60
 IST = ZoneInfo("Asia/Kolkata")
 REGULAR_FIRE_HOUR = 9
 REGULAR_FIRE_MINUTE = 30
-MONTHLY_FIRE_HOUR = 10
+MONTHLY_FIRE_HOUR = 11
 MONTHLY_FIRE_MINUTE = 0
+
+# Max number of pipeline runs that can sit in the queue behind the active one.
+# Cap exists so a stuck pipeline can't cause unbounded stacking of cron fires.
+MAX_QUEUE_DEPTH = 3
 
 MONTHLY_SUBJECT = "Analysis of ITC social scraper Agent — Monthly 2-Month Deep-Dive"
 MONTHLY_FOCUS_DIRECTIVE = """SPECIAL FOCUS — MONTHLY 2-MONTH DEEP-DIVE
@@ -137,7 +141,15 @@ _run_state: dict = {
     "last_error": None,
     "status": "idle",
 }
-_run_lock = threading.Lock()
+# Held for the entire duration of an active pipeline. A second caller will
+# block here until the active pipeline finishes, then run in arrival order.
+# This is what guarantees no scheduled or manual run is silently dropped.
+_pipeline_lock = threading.Lock()
+# Counter of runs currently waiting on _pipeline_lock (does NOT include the
+# active run). MAX_QUEUE_DEPTH bounds it so a stuck pipeline can't stack
+# infinitely. Read by /api/status so the dashboard can show "1 queued".
+_queue_depth = 0
+_queue_lock = threading.Lock()
 _scheduler = None
 
 
@@ -228,6 +240,13 @@ def run_pipeline_background(
     subject_override: str | None = None,
     focus_directive: str | None = None,
 ) -> None:
+    """Run the full pipeline. If another pipeline is in progress, this call
+    blocks on `_pipeline_lock` until it can run — that's what guarantees a
+    scheduled or manual run is never silently dropped. If the queue is already
+    full (`MAX_QUEUE_DEPTH`), the call is rejected with a loud log so a stuck
+    pipeline surfaces in Railway logs instead of leaking memory."""
+    global _queue_depth
+
     # Kill switch — applies to every code path that calls this function
     # (cron, manual /api/run, monthly cron). Defense in depth: the API
     # endpoint and the scheduler both check separately, but a paused agent
@@ -236,29 +255,61 @@ def run_pipeline_background(
         logger.info("Pipeline skipped — agent is paused.")
         return
 
-    with _run_lock:
-        if _run_state["running"]:
+    # Reserve a spot in the queue before blocking on the lock. If we can't
+    # reserve, give up loudly — never silently.
+    with _queue_lock:
+        if _queue_depth >= MAX_QUEUE_DEPTH:
+            logger.warning(
+                f"Pipeline run dropped: queue is at max depth ({MAX_QUEUE_DEPTH}). "
+                "Previous run may be stuck — check the active run's logs."
+            )
             return
-        _run_state["running"] = True
-        _run_state["status"] = "running"
-        _run_state["last_error"] = None
+        _queue_depth += 1
+        position = _queue_depth  # 1 = next in line; >1 = N-1 ahead of you
 
-    logger.info("Pipeline started (background)")
+    if position > 1:
+        logger.info(f"Pipeline queued (position {position}). Waiting for active run to finish.")
+
     try:
-        _execute_pipeline(
-            window_override=window_override,
-            subject_override=subject_override,
-            focus_directive=focus_directive,
-        )
-        _run_state["last_run"] = datetime.now().isoformat()
-        _run_state["status"] = "success"
-        logger.info("Pipeline completed successfully")
-    except Exception as exc:
-        _run_state["last_error"] = str(exc)
-        _run_state["status"] = "error"
-        logger.error(f"Pipeline failed: {exc}")
-    finally:
-        _run_state["running"] = False
+        # Blocking acquire — waits in line behind any active or earlier-queued run.
+        with _pipeline_lock:
+            with _queue_lock:
+                _queue_depth -= 1
+
+            # Re-check after waking up — the agent could have been paused
+            # while this runner was sitting in the queue.
+            if not load_settings().get("agent_enabled", True):
+                logger.info("Pipeline skipped after wait — agent was paused during the wait.")
+                return
+
+            _run_state["running"] = True
+            _run_state["status"] = "running"
+            _run_state["last_error"] = None
+
+            logger.info("Pipeline started (background)")
+            try:
+                _execute_pipeline(
+                    window_override=window_override,
+                    subject_override=subject_override,
+                    focus_directive=focus_directive,
+                )
+                _run_state["last_run"] = datetime.now().isoformat()
+                _run_state["status"] = "success"
+                logger.info("Pipeline completed successfully")
+            except Exception as exc:
+                _run_state["last_error"] = str(exc)
+                _run_state["status"] = "error"
+                logger.error(f"Pipeline failed: {exc}")
+            finally:
+                _run_state["running"] = False
+    except BaseException:
+        # Defensive: if something unexpected blew up before/during the lock
+        # acquire (KeyboardInterrupt during shutdown, threading anomaly, etc.),
+        # don't leave the counter stuck above zero.
+        with _queue_lock:
+            if _queue_depth > 0:
+                _queue_depth -= 1
+        raise
 
 
 def _run_monthly_two_month_report() -> None:
@@ -473,17 +524,28 @@ def toggle_agent(payload: AgentTogglePayload):
 
 @app.get("/api/status", dependencies=[Depends(require_token)])
 def get_status():
-    return _run_state
+    # queue_depth is the count of runs waiting on the lock (active run not included).
+    return {**_run_state, "queue_depth": _queue_depth}
 
 
 @app.post("/api/run", dependencies=[Depends(require_token)])
 def trigger_run(background_tasks: BackgroundTasks):
     if not load_settings().get("agent_enabled", True):
         raise HTTPException(status_code=409, detail="Agent is paused. Turn it on at the top of the dashboard first.")
-    if _run_state["running"]:
-        raise HTTPException(status_code=409, detail="A pipeline run is already in progress.")
+
+    # Capture busy state for the message, then enqueue. The pipeline function
+    # itself will block on the lock if needed — we never reject for busy.
+    busy = _run_state["running"] or _queue_depth > 0
     background_tasks.add_task(run_pipeline_background)
-    return {"ok": True, "message": "Pipeline started in background."}
+    return {
+        "ok": True,
+        "queued": busy,
+        "message": (
+            "Pipeline queued — another run is currently in progress. Yours will start when it finishes."
+            if busy else
+            "Pipeline started in background."
+        ),
+    }
 
 
 @app.get("/api/health")

@@ -26,6 +26,7 @@ interface Status {
   last_run: string | null;
   last_error: string | null;
   status: "idle" | "running" | "success" | "error";
+  queue_depth?: number;
 }
 
 /* ── Icons ──────────────────────────────────────────────────────────────── */
@@ -149,13 +150,14 @@ export default function Home() {
   }, [fetchSettings, fetchStatus]);
 
   useEffect(() => {
-    if (status.running) {
+    const pending = status.running || (status.queue_depth ?? 0) > 0;
+    if (pending) {
       pollRef.current = setInterval(fetchStatus, 3000);
     } else if (pollRef.current) {
       clearInterval(pollRef.current);
     }
     return () => { if (pollRef.current) clearInterval(pollRef.current); };
-  }, [status.running, fetchStatus]);
+  }, [status.running, status.queue_depth, fetchStatus]);
 
   const addAccount = () => {
     const v = accountInput.trim().replace(/^@/, "").toLowerCase();
@@ -239,7 +241,13 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/api/run`, { method: "POST" });
       if (res.ok) {
-        setStatus((s) => ({ ...s, running: true, status: "running" }));
+        const data = await res.json().catch(() => ({}));
+        if (data.queued) {
+          setSaveMsg("Pipeline queued — another run is in progress.");
+          setTimeout(() => setSaveMsg(null), 4500);
+        } else {
+          setStatus((s) => ({ ...s, running: true, status: "running" }));
+        }
         fetchStatus();
       } else {
         const err = await res.json();
@@ -258,14 +266,17 @@ export default function Home() {
     }).format(new Date(iso));
   };
 
+  const queueDepth = status.queue_depth ?? 0;
+  const queueSuffix = queueDepth > 0 ? ` · ${queueDepth} queued` : "";
+
   const statusMeta =
     status.status === "running"
-      ? { color: "var(--warn)",     label: "Running" }
+      ? { color: "var(--warn)",     label: `Running${queueSuffix}` }
       : status.status === "success"
-      ? { color: "var(--success)",  label: "Last run succeeded" }
+      ? { color: "var(--success)",  label: queueDepth > 0 ? `Last run succeeded · ${queueDepth} queued` : "Last run succeeded" }
       : status.status === "error"
-      ? { color: "var(--danger)",   label: "Last run failed" }
-      : { color: "var(--ink-muted)", label: "Idle" };
+      ? { color: "var(--danger)",   label: queueDepth > 0 ? `Last run failed · ${queueDepth} queued` : "Last run failed" }
+      : { color: "var(--ink-muted)", label: queueDepth > 0 ? `Idle · ${queueDepth} queued` : "Idle" };
 
   if (loading) {
     return (
@@ -693,7 +704,7 @@ export default function Home() {
               fontSize: 14,
               maxWidth: "60ch",
             }}>
-              On top of the schedule above, get one extra report on the 1st of every month at 10:00 IST covering the last 60 days. Fixed window — the slider above doesn&rsquo;t affect it. This version focuses on what worked for competitors, the trends they rode, the growth they saw, and how your brand can borrow those plays.
+              On top of the schedule above, get one extra report on the 1st of every month at 11:00 IST covering the last 60 days. Fixed window — the slider above doesn&rsquo;t affect it. This version focuses on what worked for competitors, the trends they rode, the growth they saw, and how your brand can borrow those plays.
             </p>
           </div>
 
@@ -909,9 +920,15 @@ export default function Home() {
           </button>
           <button
             onClick={runNow}
-            disabled={status.running || !settings.agent_enabled}
+            disabled={!settings.agent_enabled}
             className="btn btn-primary"
-            title={!settings.agent_enabled ? "Agent is paused — turn it on at the top of the page" : undefined}
+            title={
+              !settings.agent_enabled
+                ? "Agent is paused — turn it on at the top of the page"
+                : status.running
+                ? "A run is in progress — clicking will queue another"
+                : undefined
+            }
           >
             {status.running ? (
               <>

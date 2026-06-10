@@ -31,7 +31,7 @@ The backend runs **APScheduler** on the `Asia/Kolkata` timezone:
 | Report | When it fires | Lookback window | Subject line | Focus |
 |---|---|---|---|---|
 | **Regular** | Every N days at **09:30 IST** | Whatever the user set on the dashboard | `Analysis of ITC social scraper Agent` | Standard 7-section report |
-| **Monthly 2-month** *(opt-in)* | 1st of every month at **10:00 IST** | Fixed last 60 days, ignores the slider | `Analysis of ITC social scraper Agent — Monthly 2-Month Deep-Dive` | Re-weighted toward competitor wins, trends, growth signals, share/save drivers, plays the brand can borrow |
+| **Monthly 2-month** *(opt-in)* | 1st of every month at **11:00 IST** | Fixed last 60 days, ignores the slider | `Analysis of ITC social scraper Agent — Monthly 2-Month Deep-Dive` | Re-weighted toward competitor wins, trends, growth signals, share/save drivers, plays the brand can borrow |
 
 The user can also click **Run Now** for an immediate ad-hoc fire of the regular report (the monthly version is cron-only).
 
@@ -313,9 +313,10 @@ social_scraper/
 
 - Scheduler timezone is `Asia/Kolkata`. `tzdata` is pinned in `requirements.txt` so it works on slim container images.
 - **Regular job (`trend_report`)** — `IntervalTrigger(days=N, start_date=<next 09:30 IST>)`. Re-saving settings or resuming from a pause both re-anchor `start_date` to the next 09:30 IST from "now," so the cadence restarts cleanly.
-- **Monthly job (`monthly_two_month_report`)** — `CronTrigger(day=1, hour=10, minute=0, timezone=IST)`. Calendar-anchored — pausing skips a month, resuming picks up next 1st.
-- A single `_run_lock` prevents the regular cron, the monthly cron, and a manual Run Now from running concurrently. Whichever holds the lock wins; the others early-return.
-- `run_pipeline_background` checks `agent_enabled` at entry as defense in depth. Even if the scheduler somehow fires a paused job, no pipeline runs.
+- **Monthly job (`monthly_two_month_report`)** — `CronTrigger(day=1, hour=11, minute=0, timezone=IST)`. Calendar-anchored — pausing skips a month, resuming picks up next 1st. The 90-minute gap between 09:30 (regular) and 11:00 (monthly) is generous enough that a typical 12–18 min run never collides with the next.
+- **Serialised execution.** `_pipeline_lock` is held for the entire pipeline duration. A second caller (cron or manual) blocks on the lock and runs in arrival order — runs are never silently dropped. `MAX_QUEUE_DEPTH = 3` caps the wait queue so a stuck pipeline can't stack infinitely; overflow is logged loudly.
+- **Run Now queues** behind any active or queued run. `POST /api/run` returns `{queued: true}` when busy so the dashboard can show a "Pipeline queued" message; `/api/status` exposes the live `queue_depth` so the badge can show "Running · 1 queued".
+- `run_pipeline_background` checks `agent_enabled` at entry *and* again after acquiring the lock, so a kill switch flip during a queued wait is honoured.
 
 ### Known behaviours
 
