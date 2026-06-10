@@ -30,7 +30,13 @@ DEFAULT_SETTINGS = {
     "lookback_days": 15,
     "lookback_start": None,       # ISO date "YYYY-MM-DD"; only used in custom mode
     "lookback_end": None,         # ISO date "YYYY-MM-DD"; only used in custom mode
+    "monthly_two_month_report": False,  # extra fixed 60-day report on the 1st of every month
 }
+
+# Fixed window for the monthly 2-month deep-dive. Intentionally NOT derived
+# from the user's lookback settings — that's the whole point of this toggle.
+MONTHLY_JOB_ID = "monthly_two_month_report"
+MONTHLY_LOOKBACK_DAYS = 60
 
 
 def load_settings() -> dict:
@@ -92,7 +98,12 @@ def _resolve_window(settings: dict) -> tuple[str | None, str | None, str]:
     return since.date().isoformat(), None, f"Last {days} days"
 
 
-def _execute_pipeline() -> None:
+def _execute_pipeline(window_override: tuple[str | None, str | None, str] | None = None) -> None:
+    """Run the full scrape → analyse → email cycle.
+
+    If `window_override` is provided it bypasses the user's lookback settings —
+    this is how the monthly 2-month deep-dive forces its own fixed window.
+    """
     load_dotenv(override=True)
     import analyzer
     import emailer
@@ -109,7 +120,9 @@ def _execute_pipeline() -> None:
     os.environ["INSTAGRAM_ACCOUNTS"] = ",".join(accounts)
 
     business_problems = settings.get("business_problems", [])
-    since_iso, until_iso, period_label = _resolve_window(settings)
+    since_iso, until_iso, period_label = (
+        window_override if window_override is not None else _resolve_window(settings)
+    )
 
     scraped = scraper.scrape_accounts(accounts, since_iso=since_iso, until_iso=until_iso)
     report = analyzer.analyse(
@@ -120,7 +133,7 @@ def _execute_pipeline() -> None:
     emailer.send_report(report)
 
 
-def run_pipeline_background() -> None:
+def run_pipeline_background(window_override: tuple[str | None, str | None, str] | None = None) -> None:
     with _run_lock:
         if _run_state["running"]:
             return
@@ -130,7 +143,7 @@ def run_pipeline_background() -> None:
 
     logger.info("Pipeline started (background)")
     try:
-        _execute_pipeline()
+        _execute_pipeline(window_override=window_override)
         _run_state["last_run"] = datetime.now().isoformat()
         _run_state["status"] = "success"
         logger.info("Pipeline completed successfully")
@@ -140,6 +153,14 @@ def run_pipeline_background() -> None:
         logger.error(f"Pipeline failed: {exc}")
     finally:
         _run_state["running"] = False
+
+
+def _run_monthly_two_month_report() -> None:
+    """Cron entrypoint for the monthly 2-month deep-dive. Forces a 60-day window
+    regardless of the user's slider settings."""
+    until = datetime.now(timezone.utc)
+    since = until - timedelta(days=MONTHLY_LOOKBACK_DAYS)
+    run_pipeline_background(window_override=(since.date().isoformat(), None, "Last 2 months"))
 
 
 # ── Scheduler ─────────────────────────────────────────────────────────────────
@@ -165,12 +186,37 @@ def _start_scheduler() -> None:
     _scheduler.start()
     logger.info(f"Scheduler started: every {days} day(s)")
 
+    # Apply monthly deep-dive job from persisted settings on boot.
+    _apply_monthly_job(bool(settings.get("monthly_two_month_report")))
+
 
 def _reschedule(days: int) -> None:
     if _scheduler is None:
         return
     _scheduler.reschedule_job("trend_report", trigger="interval", days=days)
     logger.info(f"Scheduler updated to every {days} day(s)")
+
+
+def _apply_monthly_job(enabled: bool) -> None:
+    """Add or remove the monthly 2-month deep-dive cron job to match the toggle."""
+    if _scheduler is None:
+        return
+    try:
+        from apscheduler.triggers.cron import CronTrigger
+    except ImportError:
+        return
+
+    existing = _scheduler.get_job(MONTHLY_JOB_ID)
+    if enabled and existing is None:
+        _scheduler.add_job(
+            _run_monthly_two_month_report,
+            trigger=CronTrigger(day=1, hour=8, minute=0),  # 1st of every month, 08:00 server time (UTC on Railway)
+            id=MONTHLY_JOB_ID,
+        )
+        logger.info("Monthly 2-month deep-dive: ENABLED (1st of every month, 08:00 UTC)")
+    elif not enabled and existing is not None:
+        _scheduler.remove_job(MONTHLY_JOB_ID)
+        logger.info("Monthly 2-month deep-dive: DISABLED")
 
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
@@ -207,6 +253,7 @@ class SettingsPayload(BaseModel):
     lookback_days: int = 15
     lookback_start: str | None = None
     lookback_end: str | None = None
+    monthly_two_month_report: bool = False
 
 
 def _validate_iso_date(value: str | None) -> str | None:
@@ -238,9 +285,11 @@ def update_settings(payload: SettingsPayload):
         "lookback_days": max(1, min(180, payload.lookback_days)),
         "lookback_start": _validate_iso_date(payload.lookback_start),
         "lookback_end": _validate_iso_date(payload.lookback_end),
+        "monthly_two_month_report": bool(payload.monthly_two_month_report),
     }
     save_settings(data)
     _reschedule(data["schedule_days"])
+    _apply_monthly_job(data["monthly_two_month_report"])
     return {"ok": True, "settings": data}
 
 

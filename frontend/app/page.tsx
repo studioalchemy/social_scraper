@@ -13,6 +13,7 @@ interface Settings {
   lookback_days: number;
   lookback_start: string | null;
   lookback_end: string | null;
+  monthly_two_month_report: boolean;
 }
 
 interface Status {
@@ -104,6 +105,7 @@ export default function Home() {
     lookback_days: 15,
     lookback_start: null,
     lookback_end: null,
+    monthly_two_month_report: false,
   });
   const [status, setStatus] = useState<Status>({
     running: false,
@@ -199,6 +201,7 @@ export default function Home() {
       `• ${settings.recipient_emails.length} recipient${settings.recipient_emails.length === 1 ? "" : "s"}\n` +
       `• ${settings.business_problems.length} business problem${settings.business_problems.length === 1 ? "" : "s"}\n` +
       `• Lookback: ${lookbackSummary}\n` +
+      `• Monthly 2-month deep-dive: ${settings.monthly_two_month_report ? "on" : "off"}\n` +
       `• Every ${settings.schedule_days} ${settings.schedule_days === 1 ? "day" : "days"}`
     );
     if (!ok) return;
@@ -601,6 +604,48 @@ export default function Home() {
             </div>
           </>
         )}
+      </section>
+
+      {/* Monthly 2-month deep-dive toggle */}
+      <section className="surface rise rise-3" style={{
+        padding: "28px 32px",
+        marginBottom: 24,
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 24,
+          flexWrap: "wrap",
+        }}>
+          <div style={{ flex: 1, minWidth: 240 }}>
+            <h2 className="display" style={{
+              fontSize: 22,
+              color: "var(--ink-bright)",
+              marginBottom: 6,
+            }}>
+              Monthly 2-month deep-dive
+            </h2>
+            <p style={{
+              color: "var(--ink-soft)",
+              fontSize: 14,
+              maxWidth: "60ch",
+            }}>
+              On top of the schedule above, get one extra report on the 1st of every month covering the last 60 days. Fixed window — the slider above doesn&rsquo;t affect this one.
+            </p>
+          </div>
+
+          <label className="switch" aria-label="Monthly 2-month deep-dive">
+            <input
+              type="checkbox"
+              checked={settings.monthly_two_month_report}
+              onChange={(e) =>
+                setSettings((s) => ({ ...s, monthly_two_month_report: e.target.checked }))
+              }
+            />
+            <span className="switch-track" />
+          </label>
+        </div>
       </section>
 
       {/* Two-col forms */}
