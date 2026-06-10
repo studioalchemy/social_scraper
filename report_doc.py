@@ -30,12 +30,12 @@ def _set_cell_shading(cell, hex_fill: str):
 
 
 def _configure_styles(doc: Document) -> None:
-    """Set document-wide defaults: 1-inch margins, Calibri body, larger spacing."""
+    """Set document-wide defaults: narrow side margins, Calibri body, larger spacing."""
     for section in doc.sections:
         section.top_margin = Inches(1.0)
         section.bottom_margin = Inches(1.0)
-        section.left_margin = Inches(1.0)
-        section.right_margin = Inches(1.0)
+        section.left_margin = Inches(0.5)
+        section.right_margin = Inches(0.5)
 
     normal = doc.styles["Normal"]
     normal.font.name = BODY_FONT
@@ -223,14 +223,14 @@ def _render_section1(doc, section1):
         _add_para(doc, acc.get("posting_frequency", ""))
 
         doc.add_heading("Top 5 Performing Posts", level=3)
-        # Usable width on US Letter w/ 1" margins ≈ 6.5". Spend the budget on
-        # the two prose columns so "why_it_worked" doesn't get squeezed to a
-        # 0.8" sliver that wraps every other word.
+        # Usable width on US Letter w/ 0.5" side margins ≈ 7.5". Spend the
+        # budget on the two prose columns so "why_it_worked" doesn't get
+        # squeezed and wrap every other word.
         _add_table(
             doc,
             ["rank", "caption_excerpt", "type", "likes", "comments", "why_it_worked"],
             acc.get("top_5_posts", []),
-            col_widths=[0.45, 1.5, 0.55, 0.65, 0.75, 2.6],
+            col_widths=[0.5, 1.85, 0.6, 0.7, 0.8, 3.05],
         )
 
         doc.add_heading("Content Themes & Pillars", level=3)
