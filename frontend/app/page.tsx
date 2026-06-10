@@ -7,6 +7,7 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
 interface Settings {
   accounts: string[];
   recipient_emails: string[];
+  business_problems: string[];
   schedule_days: number;
 }
 
@@ -93,6 +94,7 @@ export default function Home() {
   const [settings, setSettings] = useState<Settings>({
     accounts: [],
     recipient_emails: [],
+    business_problems: [],
     schedule_days: 7,
   });
   const [status, setStatus] = useState<Status>({
@@ -103,6 +105,7 @@ export default function Home() {
   });
   const [accountInput, setAccountInput] = useState("");
   const [emailInput, setEmailInput] = useState("");
+  const [bpInput, setBpInput] = useState("");
   const [saving, setSaving] = useState(false);
   const [saveMsg, setSaveMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -158,6 +161,19 @@ export default function Home() {
       recipient_emails: s.recipient_emails.filter((x) => x !== e),
     }));
 
+  const addBp = () => {
+    const v = bpInput.trim();
+    if (!v || settings.business_problems.includes(v)) return;
+    if (settings.business_problems.length >= 3) return;
+    setSettings((s) => ({ ...s, business_problems: [...s.business_problems, v] }));
+    setBpInput("");
+  };
+  const removeBp = (p: string) =>
+    setSettings((s) => ({
+      ...s,
+      business_problems: s.business_problems.filter((x) => x !== p),
+    }));
+
   const handleKeyDown =
     (fn: () => void) => (e: React.KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") fn();
@@ -168,6 +184,7 @@ export default function Home() {
       `Save these settings?\n\n` +
       `• ${settings.accounts.length} account${settings.accounts.length === 1 ? "" : "s"}\n` +
       `• ${settings.recipient_emails.length} recipient${settings.recipient_emails.length === 1 ? "" : "s"}\n` +
+      `• ${settings.business_problems.length} business problem${settings.business_problems.length === 1 ? "" : "s"}\n` +
       `• Every ${settings.schedule_days} ${settings.schedule_days === 1 ? "day" : "days"}`
     );
     if (!ok) return;
@@ -489,6 +506,56 @@ export default function Home() {
           </div>
         </section>
       </div>
+
+      {/* Business problems card */}
+      <section className="surface rise rise-5" style={{ padding: "32px 32px", marginBottom: 36 }}>
+        <h2 className="display" style={{
+          fontSize: 24,
+          color: "var(--ink-bright)",
+          marginBottom: 6,
+        }}>
+          Business problems
+        </h2>
+        <p style={{ color: "var(--ink-soft)", fontSize: 14, marginBottom: 22 }}>
+          One to three problems the brand is trying to solve on Instagram. Each section of the report is anchored to these.
+        </p>
+
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+          <input
+            className="input-field"
+            placeholder="e.g. increase purchase frequency"
+            value={bpInput}
+            onChange={(e) => setBpInput(e.target.value)}
+            onKeyDown={handleKeyDown(addBp)}
+            disabled={settings.business_problems.length >= 3}
+          />
+          <button
+            onClick={addBp}
+            disabled={settings.business_problems.length >= 3}
+            className="btn btn-ghost"
+            aria-label="Add business problem"
+          >
+            <IconPlus /> Add
+          </button>
+        </div>
+
+        <div style={{ display: "flex", flexWrap: "wrap", gap: 8, minHeight: 36 }}>
+          {settings.business_problems.length === 0 ? (
+            <span style={{ color: "var(--ink-muted)", fontSize: 14 }}>
+              No business problems yet
+            </span>
+          ) : (
+            settings.business_problems.map((p) => (
+              <Tag key={p} label={p} onRemove={() => removeBp(p)} />
+            ))
+          )}
+        </div>
+        {settings.business_problems.length >= 3 && (
+          <div style={{ color: "var(--ink-muted)", fontSize: 12, marginTop: 10 }}>
+            Maximum of 3 business problems.
+          </div>
+        )}
+      </section>
 
       {/* Hint line */}
       <div className="rise rise-5" style={{

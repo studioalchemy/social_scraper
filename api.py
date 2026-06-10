@@ -21,7 +21,23 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 SETTINGS_PATH = Path(os.environ.get("SETTINGS_DIR", ".")) / "settings.json"
-DEFAULT_SETTINGS = {"accounts": [], "recipient_emails": [], "schedule_days": 7}
+DEFAULT_SETTINGS = {
+    "accounts": [],
+    "recipient_emails": [],
+    "business_problems": [],
+    "schedule_days": 7,
+}
+
+
+def load_settings() -> dict:
+    """Read settings.json, filling in defaults for any newly-added fields."""
+    if SETTINGS_PATH.exists():
+        data = json.loads(SETTINGS_PATH.read_text())
+        # Forward-compat: pre-existing settings won't have business_problems
+        for k, v in DEFAULT_SETTINGS.items():
+            data.setdefault(k, v)
+        return data
+    return DEFAULT_SETTINGS.copy()
 
 _run_state: dict = {
     "running": False,
@@ -34,11 +50,6 @@ _scheduler = None
 
 
 # ── Settings helpers ──────────────────────────────────────────────────────────
-
-def load_settings() -> dict:
-    if SETTINGS_PATH.exists():
-        return json.loads(SETTINGS_PATH.read_text())
-    return DEFAULT_SETTINGS.copy()
 
 
 def save_settings(data: dict) -> None:
@@ -64,8 +75,10 @@ def _execute_pipeline() -> None:
         os.environ["RECIPIENT_EMAILS"] = ",".join(emails)
     os.environ["INSTAGRAM_ACCOUNTS"] = ",".join(accounts)
 
+    business_problems = settings.get("business_problems", [])
+
     scraped = scraper.scrape_accounts(accounts)
-    report = analyzer.analyse(scraped)
+    report = analyzer.analyse(scraped, business_problems=business_problems)
     emailer.send_report(report)
 
 
@@ -150,6 +163,7 @@ app.add_middleware(
 class SettingsPayload(BaseModel):
     accounts: list[str]
     recipient_emails: list[str]
+    business_problems: list[str] = []
     schedule_days: int
 
 
@@ -163,6 +177,7 @@ def update_settings(payload: SettingsPayload):
     data = {
         "accounts": [a.strip().lstrip("@").lower() for a in payload.accounts if a.strip()],
         "recipient_emails": [e.strip() for e in payload.recipient_emails if e.strip()],
+        "business_problems": [p.strip() for p in payload.business_problems if p.strip()][:3],
         "schedule_days": max(1, min(90, payload.schedule_days)),
     }
     save_settings(data)

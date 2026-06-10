@@ -31,7 +31,7 @@ There are two separate config sources that must not be conflated:
 | Source | What it holds | Who writes it |
 |---|---|---|
 | `.env` | Secret credentials: `APIFY_API_TOKEN`, `ANTHROPIC_API_KEY`, `GMAIL_SENDER_EMAIL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` | Developer / Railway env vars |
-| `settings.json` | User config: `accounts`, `recipient_emails`, `schedule_days` | Frontend dashboard via `POST /api/settings` |
+| `settings.json` | User config: `accounts`, `recipient_emails`, `business_problems`, `schedule_days` | Frontend dashboard via `POST /api/settings` |
 
 `config.py` handles `.env` via lazy callables (e.g. `config.APIFY_API_TOKEN()`). Each raises `EnvironmentError` loudly if missing — intentional. `settings.json` is read directly by `api.py`'s `load_settings()` / `save_settings()` helpers.
 
@@ -43,9 +43,12 @@ When `api.py` runs the pipeline, it reads `settings.json` first and injects acco
 Browser (Vercel)          Railway service
 frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
                                 │
-                    ┌───────────┼───────────┐
-                 scraper.py  analyzer.py  emailer.py
+                    ┌───────────┼─────────────┐
+                 scraper.py  analyzer.py  ┌──┴─────────┐
+                                          report_doc.py emailer.py
 ```
+
+`report_doc.py` renders the analyzer's JSON into a formal .docx via `python-docx`. `emailer.py` attaches that .docx to a minimal Gmail-API message — no inline HTML report, no thumbnail downloads.
 
 `api.py` is the single Railway process. APScheduler runs in a background thread inside it (not a separate process). The scheduler reads `schedule_days` from `settings.json` at startup and is live-updated via `_reschedule()` whenever `POST /api/settings` is called.
 
@@ -54,15 +57,18 @@ frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
 1. `scraper.scrape_accounts(accounts)` → `dict[username, list[post_dict]]`  
    Fixed post schema: `url`, `shortCode`, `caption`, `likesCount`, `commentsCount`, `type`, `musicInfo`, `displayUrl`, `timestamp`, `ownerUsername`, `videoViewCount`.
 
-2. `analyzer.analyse(scraped_data)` → `report_dict`  
-   Calls Claude (`claude-sonnet-4-6`, `max_tokens=64000` — the model's ceiling, picked so multi-account reports never truncate). Prompt demands raw JSON matching an exact schema. Code fences are stripped before `json.loads()` because Claude occasionally wraps output anyway. `message.stop_reason == "max_tokens"` is logged as a warning so any future truncation is visible. A `_raw_posts` key is injected post-parse (top-5 per account by total engagement) for the emailer.
+2. `analyzer.analyse(scraped_data, business_problems=[...])` → `report_dict`  
+   Calls Claude (`claude-sonnet-4-6`, `max_tokens=64000`, streaming via `client.messages.stream` — required because high `max_tokens` can push the request past 10 min). System prompt defines the full 7-section report structure (header, 6 sections, summary, footer). User message embeds the inputs (BRAND_NAME inferred from the **first account's handle**, BRAND_CATEGORY inferred from the set, BUSINESS_PROBLEMS from settings, ACCOUNTS_ANALYSED with the primary brand flagged) and the scraped data block, then ends with a JSON schema Claude must match. Code fences are stripped before `json.loads()`. `_meta` is injected post-parse with the report date, scrape period, accounts count, and posts scraped — `emailer.py` and `report_doc.py` read from it.
 
-3. `emailer.send_report(report)` → sends via **Gmail API** (HTTPS, OAuth 2.0 refresh-token flow)  
-   Sender is always `GMAIL_SENDER_EMAIL` (the Gmail inbox that authorized the OAuth client). The message is built as a `multipart/related` MIME tree (HTML + inline CID image attachments), base64url-encoded, and POSTed to `gmail.users.messages.send` via the `googleapiclient` SDK. `Credentials` auto-refreshes the short-lived access token using the stored refresh token on every call. `build_html()` prefers `_raw_posts` for accurate Apify thumbnails/URLs; falls back to Claude's synthesised `top_5_posts` if absent. All user-derived strings pass through `_esc()` before insertion into HTML.
+   **The first account in `settings.accounts` is the brand being analysed**, and Section 3 of the report audits that account specifically. Everything else is competitive context. If this convention changes, update the prompt and the dashboard hint together.
+
+3. `report_doc.build_docx_bytes(report)` → `bytes`  
+   Renders the JSON report into a formal .docx via `python-docx`. Calibri body, slate-accent headings, 1-inch margins, light-grid-accent tables. Empty / zero numeric cells render as `—` so missing scrape data (Instagram hides like counts on some posts) doesn't read as "actual zero engagement." Page breaks between sections.
+
+4. `emailer.send_report(report)` → sends via **Gmail API** (HTTPS, OAuth 2.0 refresh-token flow)  
+   Builds a plain-text email body (one-paragraph notice) with the rendered .docx attached as `MIMEApplication` (`vnd.openxmlformats-officedocument.wordprocessingml.document`). Subject is fixed: `Analysis of ITC social scraper Agent`. Attachment filename is derived from the brand name and report date. The message is base64url-encoded and POSTed to `gmail.users.messages.send`. `Credentials` auto-refreshes the short-lived access token using the stored refresh token on every call.
 
    **Why Gmail API and not SMTP:** Railway blocks outbound SMTP on both port 587 (STARTTLS) and 465 (implicit TLS). Gmail API rides over HTTPS so the firewall is moot, and the sender stays as the user's real `@gmail.com` address with no custom domain required. The refresh token is generated once locally via `google-auth-oauthlib`'s `InstalledAppFlow.run_local_server()` and persists indefinitely unless revoked.
-
-   **Email durability:** thumbnails are downloaded at send time and attached as `Content-ID` inline images. This is the key reason the email doesn't degrade after a few days — Instagram's signed CDN URLs (`scontent-*.cdninstagram.com`) expire within hours; the inlined copies live inside the email itself.
 
 ## Key Behaviours to Preserve
 
