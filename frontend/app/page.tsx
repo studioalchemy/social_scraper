@@ -18,6 +18,7 @@ interface Settings {
   lookback_start: string | null;
   lookback_end: string | null;
   monthly_two_month_report: boolean;
+  agent_enabled: boolean;
 }
 
 interface Status {
@@ -111,6 +112,7 @@ export default function Home() {
     lookback_start: null,
     lookback_end: null,
     monthly_two_month_report: false,
+    agent_enabled: true,
   });
   const [status, setStatus] = useState<Status>({
     running: false,
@@ -286,12 +288,67 @@ export default function Home() {
   const setMode = (mode: "days" | "custom") =>
     setSettings((s) => ({ ...s, lookback_mode: mode }));
 
+  // Kill switch: takes effect immediately, no Save click needed. Optimistic
+  // update first, revert + surface error if the backend disagrees.
+  const toggleAgent = async (next: boolean) => {
+    setSettings((s) => ({ ...s, agent_enabled: next }));
+    try {
+      const res = await fetch(`${API}/api/agent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: next }),
+      });
+      if (!res.ok) {
+        setSettings((s) => ({ ...s, agent_enabled: !next }));
+        const err = await res.json().catch(() => ({}));
+        setSaveMsg(`Error: ${err.detail ?? "could not toggle agent"}`);
+      } else {
+        setSaveMsg(next ? "Agent resumed" : "Agent paused — no reports will go out");
+      }
+    } catch {
+      setSettings((s) => ({ ...s, agent_enabled: !next }));
+      setSaveMsg("Could not reach backend");
+    }
+    setTimeout(() => setSaveMsg(null), 3500);
+  };
+
   return (
     <main style={{
       maxWidth: 980,
       margin: "0 auto",
       padding: "72px 24px 160px",
     }}>
+      {/* Kill switch — sits above everything so the paused state is impossible to miss */}
+      <div className={`kill-switch rise rise-1 ${settings.agent_enabled ? "" : "kill-switch-off"}`}>
+        <div style={{ minWidth: 0, flex: 1 }}>
+          <div style={{
+            fontSize: 14.5,
+            fontWeight: 600,
+            color: settings.agent_enabled ? "var(--ink-bright)" : "var(--danger)",
+            marginBottom: 4,
+            letterSpacing: "-0.005em",
+          }}>
+            {settings.agent_enabled ? "Agent active" : "Agent paused"}
+          </div>
+          <div style={{
+            fontSize: 13,
+            color: "var(--ink-soft)",
+          }}>
+            {settings.agent_enabled
+              ? "Reports will be sent on schedule. Toggle off to stop all upcoming runs."
+              : "No scheduled or manual runs will fire. Toggle back on when you want reports again."}
+          </div>
+        </div>
+        <label className="switch" aria-label="Agent kill switch">
+          <input
+            type="checkbox"
+            checked={settings.agent_enabled}
+            onChange={(e) => toggleAgent(e.target.checked)}
+          />
+          <span className="switch-track" />
+        </label>
+      </div>
+
       {/* Hero header */}
       <header className="rise rise-1" style={{ marginBottom: 56 }}>
         <div style={{
@@ -852,8 +909,9 @@ export default function Home() {
           </button>
           <button
             onClick={runNow}
-            disabled={status.running}
+            disabled={status.running || !settings.agent_enabled}
             className="btn btn-primary"
+            title={!settings.agent_enabled ? "Agent is paused — turn it on at the top of the page" : undefined}
           >
             {status.running ? (
               <>

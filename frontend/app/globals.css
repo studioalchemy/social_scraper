@@ -190,6 +190,24 @@ body {
   color: var(--ink-bright);
 }
 
+/* Kill switch banner — sits above everything else */
+.kill-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 24px;
+  margin-bottom: 32px;
+  background: var(--surface-1);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-card);
+  transition: background 240ms ease, border-color 240ms ease;
+}
+.kill-switch-off {
+  background: rgba(255, 69, 58, 0.10);
+  border-color: rgba(255, 69, 58, 0.42);
+}
+
 /* iOS-style toggle switch */
 .switch {
   position: relative;

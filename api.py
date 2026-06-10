@@ -34,6 +34,7 @@ DEFAULT_SETTINGS = {
     "lookback_start": None,       # ISO date "YYYY-MM-DD"; only used in custom mode
     "lookback_end": None,         # ISO date "YYYY-MM-DD"; only used in custom mode
     "monthly_two_month_report": False,  # extra fixed 60-day report on the 1st of every month
+    "agent_enabled": True,        # master kill switch — when False, no scheduled or manual runs fire
 }
 
 # Fixed window for the monthly 2-month deep-dive. Intentionally NOT derived
@@ -227,6 +228,14 @@ def run_pipeline_background(
     subject_override: str | None = None,
     focus_directive: str | None = None,
 ) -> None:
+    # Kill switch — applies to every code path that calls this function
+    # (cron, manual /api/run, monthly cron). Defense in depth: the API
+    # endpoint and the scheduler both check separately, but a paused agent
+    # always wins here even if either of those checks slipped through.
+    if not load_settings().get("agent_enabled", True):
+        logger.info("Pipeline skipped — agent is paused.")
+        return
+
     with _run_lock:
         if _run_state["running"]:
             return
@@ -291,6 +300,8 @@ def _start_scheduler() -> None:
 
     # Apply monthly deep-dive job from persisted settings on boot.
     _apply_monthly_job(bool(settings.get("monthly_two_month_report")))
+    # Honour the kill switch from boot — paused state must persist across restarts.
+    _apply_agent_state(bool(settings.get("agent_enabled", True)))
 
 
 def _reschedule(days: int) -> None:
@@ -303,6 +314,23 @@ def _reschedule(days: int) -> None:
         start_date=_next_fire(REGULAR_FIRE_HOUR, REGULAR_FIRE_MINUTE),
     )
     logger.info(f"Scheduler updated to every {days} day(s) at 09:30 IST")
+
+
+def _apply_agent_state(enabled: bool) -> None:
+    """Pause or resume both scheduled jobs to match the kill switch.
+
+    Paused jobs stay in the scheduler but won't fire. Resume picks the next
+    natural fire time (interval / cron) — no missed-run makeup."""
+    if _scheduler is None:
+        return
+    for job_id in ("trend_report", MONTHLY_JOB_ID):
+        if _scheduler.get_job(job_id) is None:
+            continue
+        if enabled:
+            _scheduler.resume_job(job_id)
+        else:
+            _scheduler.pause_job(job_id)
+    logger.info(f"Agent kill switch: {'RESUMED' if enabled else 'PAUSED'}")
 
 
 def _apply_monthly_job(enabled: bool) -> None:
@@ -367,6 +395,11 @@ class SettingsPayload(BaseModel):
     lookback_start: str | None = None
     lookback_end: str | None = None
     monthly_two_month_report: bool = False
+    agent_enabled: bool = True
+
+
+class AgentTogglePayload(BaseModel):
+    enabled: bool
 
 
 def _validate_iso_date(value: str | None) -> str | None:
@@ -406,11 +439,24 @@ def update_settings(payload: SettingsPayload):
         "lookback_start": _validate_iso_date(payload.lookback_start),
         "lookback_end": _validate_iso_date(payload.lookback_end),
         "monthly_two_month_report": bool(payload.monthly_two_month_report),
+        "agent_enabled": bool(payload.agent_enabled),
     }
     save_settings(data)
     _reschedule(data["schedule_days"])
     _apply_monthly_job(data["monthly_two_month_report"])
+    _apply_agent_state(data["agent_enabled"])
     return {"ok": True, "settings": data}
+
+
+@app.post("/api/agent", dependencies=[Depends(require_token)])
+def toggle_agent(payload: AgentTogglePayload):
+    """Immediate-action endpoint for the kill switch. Doesn't require the
+    user to click Save Settings — flipping the switch should take effect now."""
+    data = load_settings()
+    data["agent_enabled"] = bool(payload.enabled)
+    save_settings(data)
+    _apply_agent_state(data["agent_enabled"])
+    return {"ok": True, "agent_enabled": data["agent_enabled"]}
 
 
 @app.get("/api/status", dependencies=[Depends(require_token)])
@@ -420,6 +466,8 @@ def get_status():
 
 @app.post("/api/run", dependencies=[Depends(require_token)])
 def trigger_run(background_tasks: BackgroundTasks):
+    if not load_settings().get("agent_enabled", True):
+        raise HTTPException(status_code=409, detail="Agent is paused. Turn it on at the top of the dashboard first.")
     if _run_state["running"]:
         raise HTTPException(status_code=409, detail="A pipeline run is already in progress.")
     background_tasks.add_task(run_pipeline_background)
