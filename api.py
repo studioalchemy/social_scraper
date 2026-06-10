@@ -319,8 +319,14 @@ def _reschedule(days: int) -> None:
 def _apply_agent_state(enabled: bool) -> None:
     """Pause or resume both scheduled jobs to match the kill switch.
 
-    Paused jobs stay in the scheduler but won't fire. Resume picks the next
-    natural fire time (interval / cron) — no missed-run makeup."""
+    Paused jobs stay in the scheduler but won't fire.
+
+    On resume: the interval (regular) job gets re-anchored to the next 09:30 IST
+    in the future, so the cadence behaves like "restart fresh from now" instead
+    of picking up the original anchor (which could fire the next morning if the
+    user paused mid-cycle). The monthly cron stays calendar-anchored to the 1st
+    of every month — that's what "monthly" means.
+    """
     if _scheduler is None:
         return
     for job_id in ("trend_report", MONTHLY_JOB_ID):
@@ -330,6 +336,12 @@ def _apply_agent_state(enabled: bool) -> None:
             _scheduler.resume_job(job_id)
         else:
             _scheduler.pause_job(job_id)
+
+    # Re-anchor the interval cadence to "next 09:30 IST from now" on resume.
+    if enabled:
+        settings = load_settings()
+        _reschedule(int(settings.get("schedule_days", 7)))
+
     logger.info(f"Agent kill switch: {'RESUMED' if enabled else 'PAUSED'}")
 
 
