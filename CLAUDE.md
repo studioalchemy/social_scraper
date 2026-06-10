@@ -95,4 +95,7 @@ frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
   - `GMAIL_SENDER_EMAIL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN` (Gmail API auth)
   - `FRONTEND_URL` (Vercel origin, exact match — no trailing slash)
   - `SETTINGS_DIR=/data` (points to the attached Railway volume so `settings.json` persists across redeploys)
-- **Vercel**: root directory set to `frontend/`. Needs `NEXT_PUBLIC_API_URL` pointing to the Railway service URL (must include `https://`, no trailing slash — it's baked into the JS bundle at build time, so changing it requires a fresh Vercel build, not just a save).
+  - `API_BEARER_TOKEN` — shared-secret bearer enforced by `require_token` on `/api/settings`, `/api/status`, `/api/run`. If unset, those endpoints return 503. `/api/health` stays open for Railway's monitor.
+- **Vercel**: root directory set to `frontend/`. Needs:
+  - `NEXT_PUBLIC_API_URL` — Railway service URL (must include `https://`, no trailing slash — baked into the JS bundle at build time, so changing it requires a fresh Vercel build).
+  - `NEXT_PUBLIC_API_TOKEN` — must match Railway's `API_BEARER_TOKEN` exactly. Also bundle-baked, so visible in page source; treat as a trivial-attacker deterrent, not a strong secret.

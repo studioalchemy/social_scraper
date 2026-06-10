@@ -1,6 +1,8 @@
 import json
 import logging
 import os
+import re
+import secrets
 import threading
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
@@ -8,7 +10,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -66,6 +68,56 @@ def _next_fire(hour: int, minute: int) -> datetime:
     if candidate <= now:
         candidate += timedelta(days=1)
     return candidate
+
+
+# ── Input validation ─────────────────────────────────────────────────────────
+# Instagram handle: 1-30 chars, alphanumeric + . _ only. No slashes, no spaces.
+# Rejecting anything else stops crafted handles like "nike/p/abcd" that would
+# redirect Apify into scraping arbitrary post URLs.
+HANDLE_RE = re.compile(r"^[a-zA-Z0-9._]{1,30}$")
+
+# Practical email shape. The strict requirement here is the absence of CR/LF —
+# those are how an attacker would smuggle Bcc:/Cc: headers into the To field.
+EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+
+
+def _clean_handle(raw: str) -> str | None:
+    s = raw.strip().lstrip("@").lower()
+    return s if HANDLE_RE.fullmatch(s) else None
+
+
+def _clean_email(raw: str) -> str | None:
+    s = raw.strip()
+    if "\r" in s or "\n" in s:
+        return None
+    return s if EMAIL_RE.fullmatch(s) else None
+
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+# Shared-secret bearer token. The frontend forwards it via the Authorization
+# header. Without this, /api/run and /api/settings would be open to anyone
+# who finds the Railway URL — easy way to burn Apify + Anthropic credits.
+def require_token(authorization: str | None = Header(default=None)) -> None:
+    server_token = os.getenv("API_BEARER_TOKEN", "")
+    if not server_token:
+        # Fail closed: refusing the request beats silently accepting it.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="API_BEARER_TOKEN not configured on server.",
+        )
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing or malformed Authorization header.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    presented = authorization.split(" ", 1)[1].strip()
+    if not secrets.compare_digest(presented, server_token):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def load_settings() -> dict:
@@ -329,17 +381,24 @@ def _validate_iso_date(value: str | None) -> str | None:
         return None
 
 
-@app.get("/api/settings")
+@app.get("/api/settings", dependencies=[Depends(require_token)])
 def get_settings():
     return load_settings()
 
 
-@app.post("/api/settings")
+@app.post("/api/settings", dependencies=[Depends(require_token)])
 def update_settings(payload: SettingsPayload):
     mode = payload.lookback_mode if payload.lookback_mode in ("days", "custom") else "days"
+
+    # Drop invalid handles / emails silently — the frontend prevents these from
+    # being submitted, so a bad value reaching us is either a stale state or
+    # an attacker probing. Either way, just skip it.
+    cleaned_accounts = [h for h in (_clean_handle(a) for a in payload.accounts) if h]
+    cleaned_emails = [e for e in (_clean_email(em) for em in payload.recipient_emails) if e]
+
     data = {
-        "accounts": [a.strip().lstrip("@").lower() for a in payload.accounts if a.strip()],
-        "recipient_emails": [e.strip() for e in payload.recipient_emails if e.strip()],
+        "accounts": cleaned_accounts,
+        "recipient_emails": cleaned_emails,
         "business_problems": [p.strip() for p in payload.business_problems if p.strip()][:3],
         "schedule_days": max(1, min(90, payload.schedule_days)),
         "lookback_mode": mode,
@@ -354,12 +413,12 @@ def update_settings(payload: SettingsPayload):
     return {"ok": True, "settings": data}
 
 
-@app.get("/api/status")
+@app.get("/api/status", dependencies=[Depends(require_token)])
 def get_status():
     return _run_state
 
 
-@app.post("/api/run")
+@app.post("/api/run", dependencies=[Depends(require_token)])
 def trigger_run(background_tasks: BackgroundTasks):
     if _run_state["running"]:
         raise HTTPException(status_code=409, detail="A pipeline run is already in progress.")
@@ -369,4 +428,5 @@ def trigger_run(background_tasks: BackgroundTasks):
 
 @app.get("/api/health")
 def health():
+    """Public health check for Railway's monitor — intentionally unauthenticated."""
     return {"ok": True}

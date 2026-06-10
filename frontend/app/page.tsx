@@ -3,6 +3,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
+const API_TOKEN = process.env.NEXT_PUBLIC_API_TOKEN ?? "";
+
+// Note: NEXT_PUBLIC_* values are baked into the JS bundle, so this token is
+// visible to anyone who reads page source. It still blocks trivial curl
+// against the Railway URL and automated probes — a meaningful step up from
+// nothing. For real defence-in-depth, proxy through a Next.js route handler
+// that injects the token server-side from a private env var.
+const authHeaders = (): HeadersInit =>
+  API_TOKEN ? { Authorization: `Bearer ${API_TOKEN}` } : {};
 
 interface Settings {
   accounts: string[];
@@ -124,7 +133,7 @@ export default function Home() {
 
   const fetchSettings = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/settings`);
+      const res = await fetch(`${API}/api/settings`, { headers: authHeaders() });
       if (res.ok) setSettings(await res.json());
     } catch { /* backend not reachable yet */ }
     finally { setLoading(false); }
@@ -132,7 +141,7 @@ export default function Home() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch(`${API}/api/status`);
+      const res = await fetch(`${API}/api/status`, { headers: authHeaders() });
       if (res.ok) setStatus(await res.json());
     } catch { /* ignore */ }
   }, []);
@@ -212,7 +221,7 @@ export default function Home() {
     try {
       const res = await fetch(`${API}/api/settings`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(settings),
       });
       if (res.ok) {
@@ -231,7 +240,10 @@ export default function Home() {
 
   const runNow = async () => {
     try {
-      const res = await fetch(`${API}/api/run`, { method: "POST" });
+      const res = await fetch(`${API}/api/run`, {
+        method: "POST",
+        headers: authHeaders(),
+      });
       if (res.ok) {
         setStatus((s) => ({ ...s, running: true, status: "running" }));
         fetchStatus();
