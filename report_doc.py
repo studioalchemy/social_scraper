@@ -224,6 +224,18 @@ def _render_section1(doc, section1):
             doc.add_heading("Engagement Patterns", level=3)
             _add_bullets(doc, acc.get("engagement_patterns", []))
 
+        collabs = acc.get("creator_collaborations") or []
+        if collabs:
+            doc.add_heading("Creator Collaborations", level=3)
+            _add_table(
+                doc,
+                ["creator_handle", "post_type", "post_url", "caption_excerpt", "engagement_summary", "is_paid_partnership"],
+                collabs,
+            )
+        else:
+            doc.add_heading("Creator Collaborations", level=3)
+            _add_meta_line(doc, "No creator collaborations detected in this scrape window.", italic=True)
+
         doc.add_heading("Key Insight", level=3)
         _add_para(doc, acc.get("key_insight", ""))
 

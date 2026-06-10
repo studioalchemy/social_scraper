@@ -61,8 +61,9 @@ frontend/app/page.tsx  →  api.py (FastAPI + APScheduler)
    - `apify/instagram-reel-scraper` (limit 15) — Reels with accurate `playCount`
    - `apify/instagram-comment-scraper` — comments on the top-5 posts by engagement (30 each)
    - `apify/instagram-tagged-scraper` — UGC posts where the account is tagged (limit 15)
+   - `apify/brand-collaboration-scraper` — sponsored / paid-partnership posts that link the brand to specific creators (limit 20). Surfaces creator handles, post URLs, and the `isPaidPartnership` flag — fed into the per-account `creator_collaborations` subsection in Section 1 of the report.
 
-   Each per-slice scrape is wrapped in try/except so one actor's failure doesn't poison the whole account — partial data is preserved. The returned `account_data` shape is `{username, profile, posts, reels, comments, tagged_posts}` where `comments` is a dict keyed by post URL. Total per pipeline run: 5 actor types × N accounts ≈ 25 actor invocations for a 5-account brief, ~10–15 min real time. Default actor timeouts apply.
+   Each per-slice scrape is wrapped in try/except so one actor's failure doesn't poison the whole account — partial data is preserved. The returned `account_data` shape is `{username, profile, posts, reels, comments, tagged_posts, collaborations}` where `comments` is a dict keyed by post URL. Total per pipeline run: 6 actor types × N accounts ≈ 30 actor invocations for a 5-account brief, ~12–18 min real time. Default actor timeouts apply.
 
    Post / reel / comment / tagged outputs are normalized via the local `_extract_*` helpers so the analyzer doesn't have to know about each actor's raw schema.
 

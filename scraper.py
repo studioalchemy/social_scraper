@@ -1,11 +1,13 @@
 """Multi-actor Instagram scraper.
 
-For each account we orchestrate four Apify actors:
-  1. apify/instagram-profile-scraper — profile metadata (followers, verified, bio)
-  2. apify/instagram-scraper          — recent posts + engagement
-  3. apify/instagram-reel-scraper     — Reels with accurate play counts
-  4. apify/instagram-comment-scraper  — comments on the top-5 posts per account
-  5. apify/instagram-tagged-scraper   — UGC / creator-tagged posts (best-effort)
+For each account we orchestrate six Apify actors:
+  1. apify/instagram-profile-scraper      — profile metadata
+  2. apify/instagram-scraper              — recent posts + engagement
+  3. apify/instagram-reel-scraper         — Reels with accurate play counts
+  4. apify/instagram-comment-scraper      — comments on the top-5 posts
+  5. apify/instagram-tagged-scraper       — UGC / creator-tagged posts
+  6. apify/brand-collaboration-scraper    — sponsored / paid-partnership posts
+                                            (links the brand to creators)
 
 Any single actor failure is downgraded to an empty result for that slice so
 the pipeline can still produce a partial report instead of erroring out.
@@ -20,6 +22,7 @@ logger = logging.getLogger(__name__)
 POSTS_PER_ACCOUNT = 30
 REELS_PER_ACCOUNT = 15
 TAGGED_PER_ACCOUNT = 15
+COLLABS_PER_ACCOUNT = 20
 COMMENTS_PER_POST = 30
 COMMENTS_TOP_N_POSTS = 5
 DELAY_BETWEEN_ACCOUNTS_SECONDS = 4
@@ -198,6 +201,43 @@ def _scrape_tagged(client: ApifyClient, username: str) -> list[dict]:
     return [_extract_tagged(it) for it in items]
 
 
+def _extract_collab(item: dict) -> dict:
+    """Normalize a brand-collaboration record.
+
+    The actor's exact field names aren't fully documented; we probe several
+    likely keys for creator handle / post URL / type so an upstream rename
+    doesn't silently zero out the section.
+    """
+    creator = (
+        item.get("creatorUsername")
+        or item.get("creator", {}).get("username") if isinstance(item.get("creator"), dict) else None
+    ) or item.get("collaboratorUsername") or item.get("partnerUsername") or item.get("ownerUsername") or ""
+    return {
+        "creator_handle": creator,
+        "post_url": item.get("postUrl") or item.get("url") or "",
+        "post_type": item.get("type") or item.get("mediaType") or "",
+        "caption_excerpt": (item.get("caption") or "")[:240],
+        "likes": item.get("likesCount") or item.get("likes") or 0,
+        "comments": item.get("commentsCount") or item.get("comments") or 0,
+        "views": item.get("videoViewCount") or item.get("playCount") or 0,
+        "timestamp": item.get("timestamp") or "",
+        "is_paid_partnership": item.get("isPaidPartnership") or item.get("paidPartnership") or False,
+    }
+
+
+def _scrape_collaborations(client: ApifyClient, username: str) -> list[dict]:
+    items = _run_actor(
+        client,
+        "apify/brand-collaboration-scraper",
+        {
+            "usernames": [username],
+            "resultsLimit": COLLABS_PER_ACCOUNT,
+        },
+        f"@{username} brand collaborations",
+    )
+    return [_extract_collab(it) for it in items]
+
+
 # ── Public entrypoint ────────────────────────────────────────────────────────
 
 def scrape_accounts(accounts: list[str]) -> dict[str, dict]:
@@ -223,6 +263,7 @@ def scrape_accounts(accounts: list[str]) -> dict[str, dict]:
         posts = _scrape_posts(client, username)
         reels = _scrape_reels(client, username)
         tagged = _scrape_tagged(client, username)
+        collaborations = _scrape_collaborations(client, username)
 
         # Pick the top-N posts by total engagement for comment scraping.
         engagement = lambda p: (p.get("likesCount") or 0) + (p.get("commentsCount") or 0) + (p.get("videoViewCount") or 0)
@@ -237,6 +278,7 @@ def scrape_accounts(accounts: list[str]) -> dict[str, dict]:
             "reels": reels,
             "comments": comments_by_post,
             "tagged_posts": tagged,
+            "collaborations": collaborations,
         }
 
         if i < len(accounts) - 1:

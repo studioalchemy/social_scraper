@@ -28,7 +28,7 @@ SECTION 1 — COMPETITIVE LANDSCAPE
 - Open with one italicised line stating: scrape date range, how engagement rate is calculated, asterisk disclaimers for skewed outliers.
 - At-a-glance table for all accounts: Account, Followers, Following, Posts, Verified, Avg ER, Format Mix, Posts/Wk.
 - Footnotes below the table for any asterisked ER figures.
-- For each account, a per-account deep dive: header line, Content Format Mix (bullets with % and one-line description), Posting Frequency (bullet + context), Top 5 Performing Posts table (#, Caption excerpt, Type, Likes, Comments, Why It Worked — the Why column must be analytical, not descriptive), Content Themes & Pillars (3–5 bullets), Brand Voice (3–4 bullets), Engagement Patterns (optional), Key Insight (one paragraph, single strategic point).
+- For each account, a per-account deep dive: header line, Content Format Mix (bullets with % and one-line description), Posting Frequency (bullet + context), Top 5 Performing Posts table (#, Caption excerpt, Type, Likes, Comments, Why It Worked — the Why column must be analytical, not descriptive), Content Themes & Pillars (3–5 bullets), Brand Voice (3–4 bullets), Engagement Patterns (optional), Creator Collaborations (list every creator the brand has worked with that appears in the BRAND COLLABORATIONS block — include creator handle, the post/reel URL they contributed to, the post type, a caption excerpt, engagement, and whether it was a paid partnership; if no collaborations were detected leave the array empty), Key Insight (one paragraph, single strategic point).
 - For accounts with very limited own-post data, use a Key Observations bullet list + Key Insight instead of the full template, and mark is_limited_data true.
 
 SECTION 2 — COMPETITIVE POSITIONING MAP
@@ -88,7 +88,7 @@ RULES FOR EVERY REPORT:
 8. Don'ts cite a competitor failure with a data point.
 9. Format the report for readability — use exact headers, bold labels, table structures, bullet formatting.
 10. Adapt depth to the data — if an account has fewer than 5 scraped posts, use Key Observations format and mark is_limited_data true.
-
+11. Flag promoted/sponsored posts in tables. If a post is marked as promoted, boosted, or sponsored in the scraped data, add [PROMOTED] in bold directly after the caption excerpt in the "Caption (excerpt)" column. Do not move it to a separate column. Example: "Budget: 0, Effort: 100" **[PROMOTED]**. This applies to every table where posts appear — Top 5 Performing Posts per account and any cross-account post tables.
 Return ONLY a valid JSON object matching the provided schema. No markdown, no code blocks, just raw JSON. Be specific, data-driven, and use exact numbers from the scraped data."""
 
 
@@ -98,8 +98,9 @@ def _format_account_block(username: str, role: str, data: dict) -> str:
     reels = data.get("reels") or []
     comments_by_post = data.get("comments") or {}
     tagged = data.get("tagged_posts") or []
+    collaborations = data.get("collaborations") or []
 
-    if not (profile or posts or reels or tagged):
+    if not (profile or posts or reels or tagged or collaborations):
         return f"\n=== @{username} [{role}] ===\nNo data scraped (all actor calls failed or account private)."
 
     # Profile line
@@ -168,6 +169,17 @@ def _format_account_block(username: str, role: str, data: dict) -> str:
             f"Comments: {t.get('commentsCount', 0)} | Caption: {(t.get('caption') or '')[:140]}"
         )
 
+    # Brand collaborations — creators who appear in paid / partnered content
+    collab_lines = []
+    for c in collaborations[:15]:
+        paid_flag = " [PAID]" if c.get("is_paid_partnership") else ""
+        collab_lines.append(
+            f"  - Creator: @{c.get('creator_handle', '?')}{paid_flag} | "
+            f"{c.get('post_type', '?')} | URL: {c.get('post_url', '')} | "
+            f"Likes: {c.get('likes', 0)}, Comments: {c.get('comments', 0)}, Views: {c.get('views', 0)}\n"
+            f"    Caption: {(c.get('caption_excerpt') or '')[:160]}"
+        )
+
     blocks = [f"\n=== @{username} [{role}] ==="]
     blocks.extend(p_lines)
     if post_lines:
@@ -182,6 +194,9 @@ def _format_account_block(username: str, role: str, data: dict) -> str:
     if tagged_lines:
         blocks.append(f"\nTAGGED / UGC ({len(tagged)} fetched, showing {len(tagged_lines)}):")
         blocks.extend(tagged_lines)
+    if collab_lines:
+        blocks.append(f"\nBRAND COLLABORATIONS ({len(collaborations)} fetched, showing {len(collab_lines)}):")
+        blocks.extend(collab_lines)
 
     return "\n".join(blocks)
 
@@ -234,6 +249,9 @@ def _build_user_message(
         "content_themes": ["theme 1", "theme 2"],
         "brand_voice": ["voice characteristic 1"],
         "engagement_patterns": ["pattern 1"],
+        "creator_collaborations": [
+          {"creator_handle": "@creator", "post_type": "Reel|Image|Carousel", "post_url": "...", "caption_excerpt": "...", "engagement_summary": "X likes, Y comments, Z views", "is_paid_partnership": true}
+        ],
         "key_insight": "one paragraph",
         "is_limited_data": false,
         "key_observations": []
