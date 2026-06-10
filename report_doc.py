@@ -113,7 +113,19 @@ def _add_bullets(doc, items):
         doc.add_paragraph(str(item), style="List Bullet")
 
 
-def _add_table(doc, headers, rows):
+def _set_col_widths(table, widths_inches: list[float]) -> None:
+    """Apply per-column widths in inches. Word ignores autofit-on widths and
+    sometimes ignores column-level widths, so we set width on every cell —
+    that's the only setting that sticks reliably across Word builds."""
+    table.autofit = False
+    table.allow_autofit = False
+    for row in table.rows:
+        for idx, width in enumerate(widths_inches):
+            if idx < len(row.cells):
+                row.cells[idx].width = Inches(width)
+
+
+def _add_table(doc, headers, rows, col_widths: list[float] | None = None):
     if not rows:
         _add_para(doc, "(no data)")
         return
@@ -141,6 +153,9 @@ def _add_table(doc, headers, rows):
             run = p.add_run(_fmt_cell(val))
             run.font.size = Pt(10)
             cells[c_idx].vertical_alignment = WD_ALIGN_VERTICAL.CENTER
+
+    if col_widths and len(col_widths) == len(headers):
+        _set_col_widths(table, col_widths)
 
 
 def _fmt_cell(v) -> str:
@@ -208,10 +223,14 @@ def _render_section1(doc, section1):
         _add_para(doc, acc.get("posting_frequency", ""))
 
         doc.add_heading("Top 5 Performing Posts", level=3)
+        # Usable width on US Letter w/ 1" margins ≈ 6.5". Spend the budget on
+        # the two prose columns so "why_it_worked" doesn't get squeezed to a
+        # 0.8" sliver that wraps every other word.
         _add_table(
             doc,
             ["rank", "caption_excerpt", "type", "likes", "comments", "why_it_worked"],
             acc.get("top_5_posts", []),
+            col_widths=[0.45, 1.5, 0.55, 0.65, 0.75, 2.6],
         )
 
         doc.add_heading("Content Themes & Pillars", level=3)
