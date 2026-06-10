@@ -96,11 +96,15 @@ def analyse(scraped_data: dict[str, list[dict]]) -> dict:
     client = anthropic.Anthropic(api_key=config.ANTHROPIC_API_KEY())
 
     logger.info("Sending data to Claude for analysis...")
-    message = client.messages.create(
+    # Anthropic SDK requires streaming for requests that may exceed 10 min,
+    # and max_tokens=64000 trips that threshold. Stream and assemble.
+    with client.messages.stream(
         model=MODEL,
         max_tokens=64000,
         messages=[{"role": "user", "content": prompt}],
-    )
+    ) as stream:
+        message = stream.get_final_message()
+
     if message.stop_reason == "max_tokens":
         logger.warning("Claude hit max_tokens — report may be truncated.")
 
