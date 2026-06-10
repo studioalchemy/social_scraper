@@ -14,6 +14,7 @@ the pipeline can still produce a partial report instead of erroring out.
 """
 import time
 import logging
+from datetime import datetime, timezone
 from apify_client import ApifyClient
 import config
 
@@ -26,6 +27,38 @@ COLLABS_PER_ACCOUNT = 20
 COMMENTS_PER_POST = 30
 COMMENTS_TOP_N_POSTS = 5
 DELAY_BETWEEN_ACCOUNTS_SECONDS = 4
+
+
+def _parse_ts(ts) -> datetime | None:
+    """Best-effort parse for Apify timestamps (ISO strings or unix seconds)."""
+    if ts is None or ts == "":
+        return None
+    if isinstance(ts, (int, float)):
+        try:
+            return datetime.fromtimestamp(float(ts), tz=timezone.utc)
+        except (ValueError, OSError):
+            return None
+    if isinstance(ts, str):
+        try:
+            return datetime.fromisoformat(ts.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return None
+
+
+def _within_window(item: dict, since_dt: datetime | None, until_dt: datetime | None) -> bool:
+    """Keep the item if its timestamp falls inside [since, until].
+    If we can't read the timestamp, keep it — better than silently dropping data."""
+    if since_dt is None and until_dt is None:
+        return True
+    ts = _parse_ts(item.get("timestamp"))
+    if ts is None:
+        return True
+    if since_dt and ts < since_dt:
+        return False
+    if until_dt and ts > until_dt:
+        return False
+    return True
 
 
 def _run_field(run, *names):
@@ -101,16 +134,20 @@ def _extract_post(item: dict) -> dict:
     }
 
 
-def _scrape_posts(client: ApifyClient, username: str) -> list[dict]:
+def _scrape_posts(client: ApifyClient, username: str, since_iso: str | None = None) -> list[dict]:
+    run_input = {
+        "directUrls": [f"https://www.instagram.com/{username}/"],
+        "resultsType": "posts",
+        "resultsLimit": POSTS_PER_ACCOUNT,
+        "addParentData": True,
+    }
+    if since_iso:
+        # The instagram-scraper actor accepts a YYYY-MM-DD cutoff here.
+        run_input["onlyPostsNewerThan"] = since_iso
     items = _run_actor(
         client,
         "apify/instagram-scraper",
-        {
-            "directUrls": [f"https://www.instagram.com/{username}/"],
-            "resultsType": "posts",
-            "resultsLimit": POSTS_PER_ACCOUNT,
-            "addParentData": True,
-        },
+        run_input,
         f"@{username} posts",
     )
     return [_extract_post(it) for it in items]
@@ -240,8 +277,16 @@ def _scrape_collaborations(client: ApifyClient, username: str) -> list[dict]:
 
 # ── Public entrypoint ────────────────────────────────────────────────────────
 
-def scrape_accounts(accounts: list[str]) -> dict[str, dict]:
-    """For each account, fetch profile + posts + reels + comments + tagged.
+def scrape_accounts(
+    accounts: list[str],
+    since_iso: str | None = None,
+    until_iso: str | None = None,
+) -> dict[str, dict]:
+    """For each account, fetch profile + posts + reels + comments + tagged + collaborations.
+
+    `since_iso` / `until_iso` are inclusive date-only bounds (YYYY-MM-DD). When set,
+    items outside the window are dropped after extraction. The posts actor also
+    receives `onlyPostsNewerThan` so it can short-circuit upstream.
 
     Returns a dict keyed by username with this shape per entry:
         {
@@ -251,19 +296,33 @@ def scrape_accounts(accounts: list[str]) -> dict[str, dict]:
             "reels": list[dict],                      # extracted reels
             "comments": dict[post_url, list[dict]],   # comments per top post
             "tagged_posts": list[dict],               # UGC mentioning the account
+            "collaborations": list[dict],             # paid / brand partnerships
         }
     """
     client = ApifyClient(config.APIFY_API_TOKEN())
     results: dict[str, dict] = {}
 
+    since_dt = _parse_ts(since_iso) if since_iso else None
+    until_dt = _parse_ts(until_iso) if until_iso else None
+    if since_dt or until_dt:
+        logger.info(f"Lookback window: {since_iso or '—'} → {until_iso or 'now'}")
+
     for i, username in enumerate(accounts):
         logger.info(f"=== Scraping @{username} ({i+1}/{len(accounts)}) ===")
 
         profile = _scrape_profile(client, username)
-        posts = _scrape_posts(client, username)
+        posts = _scrape_posts(client, username, since_iso=since_iso)
         reels = _scrape_reels(client, username)
         tagged = _scrape_tagged(client, username)
         collaborations = _scrape_collaborations(client, username)
+
+        # Post-filter every time-bound slice to the window so slices that don't
+        # natively support date filters still respect it.
+        if since_dt or until_dt:
+            posts = [p for p in posts if _within_window(p, since_dt, until_dt)]
+            reels = [r for r in reels if _within_window(r, since_dt, until_dt)]
+            tagged = [t for t in tagged if _within_window(t, since_dt, until_dt)]
+            collaborations = [c for c in collaborations if _within_window(c, since_dt, until_dt)]
 
         # Pick the top-N posts by total engagement for comment scraping.
         engagement = lambda p: (p.get("likesCount") or 0) + (p.get("commentsCount") or 0) + (p.get("videoViewCount") or 0)

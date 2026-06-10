@@ -3,7 +3,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -26,6 +26,10 @@ DEFAULT_SETTINGS = {
     "recipient_emails": [],
     "business_problems": [],
     "schedule_days": 7,
+    "lookback_mode": "days",      # "days" | "custom"
+    "lookback_days": 15,
+    "lookback_start": None,       # ISO date "YYYY-MM-DD"; only used in custom mode
+    "lookback_end": None,         # ISO date "YYYY-MM-DD"; only used in custom mode
 }
 
 
@@ -59,6 +63,35 @@ def save_settings(data: dict) -> None:
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
 
+def _resolve_window(settings: dict) -> tuple[str | None, str | None, str]:
+    """Compute (since_iso, until_iso, human_label) from the lookback settings.
+
+    `since_iso` / `until_iso` are YYYY-MM-DD bounds passed to the scraper.
+    `human_label` is a short phrase like "Last 15 days" or "May 1 – Jun 10, 2026"
+    that the analyzer puts into the report's scrape_period field.
+    """
+    mode = settings.get("lookback_mode", "days")
+    if mode == "custom":
+        start = (settings.get("lookback_start") or "").strip() or None
+        end = (settings.get("lookback_end") or "").strip() or None
+        try:
+            label_parts = []
+            if start:
+                label_parts.append(datetime.fromisoformat(start).strftime("%b %-d, %Y"))
+            if end:
+                label_parts.append(datetime.fromisoformat(end).strftime("%b %-d, %Y"))
+            label = " – ".join(label_parts) if label_parts else "Custom range"
+        except ValueError:
+            label = "Custom range"
+        return start, end, label
+
+    days = int(settings.get("lookback_days", 15) or 15)
+    days = max(1, min(180, days))
+    until = datetime.now(timezone.utc)
+    since = until - timedelta(days=days)
+    return since.date().isoformat(), None, f"Last {days} days"
+
+
 def _execute_pipeline() -> None:
     load_dotenv(override=True)
     import analyzer
@@ -76,9 +109,14 @@ def _execute_pipeline() -> None:
     os.environ["INSTAGRAM_ACCOUNTS"] = ",".join(accounts)
 
     business_problems = settings.get("business_problems", [])
+    since_iso, until_iso, period_label = _resolve_window(settings)
 
-    scraped = scraper.scrape_accounts(accounts)
-    report = analyzer.analyse(scraped, business_problems=business_problems)
+    scraped = scraper.scrape_accounts(accounts, since_iso=since_iso, until_iso=until_iso)
+    report = analyzer.analyse(
+        scraped,
+        business_problems=business_problems,
+        scrape_period=period_label,
+    )
     emailer.send_report(report)
 
 
@@ -165,6 +203,22 @@ class SettingsPayload(BaseModel):
     recipient_emails: list[str]
     business_problems: list[str] = []
     schedule_days: int
+    lookback_mode: str = "days"
+    lookback_days: int = 15
+    lookback_start: str | None = None
+    lookback_end: str | None = None
+
+
+def _validate_iso_date(value: str | None) -> str | None:
+    if not value:
+        return None
+    value = value.strip()
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(value).date().isoformat()
+    except ValueError:
+        return None
 
 
 @app.get("/api/settings")
@@ -174,11 +228,16 @@ def get_settings():
 
 @app.post("/api/settings")
 def update_settings(payload: SettingsPayload):
+    mode = payload.lookback_mode if payload.lookback_mode in ("days", "custom") else "days"
     data = {
         "accounts": [a.strip().lstrip("@").lower() for a in payload.accounts if a.strip()],
         "recipient_emails": [e.strip() for e in payload.recipient_emails if e.strip()],
         "business_problems": [p.strip() for p in payload.business_problems if p.strip()][:3],
         "schedule_days": max(1, min(90, payload.schedule_days)),
+        "lookback_mode": mode,
+        "lookback_days": max(1, min(180, payload.lookback_days)),
+        "lookback_start": _validate_iso_date(payload.lookback_start),
+        "lookback_end": _validate_iso_date(payload.lookback_end),
     }
     save_settings(data)
     _reschedule(data["schedule_days"])

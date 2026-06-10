@@ -103,6 +103,7 @@ def _format_account_block(username: str, role: str, data: dict) -> str:
     if not (profile or posts or reels or tagged or collaborations):
         return f"\n=== @{username} [{role}] ===\nNo data scraped (all actor calls failed or account private)."
 
+
     # Profile line
     p_lines = []
     if profile:
@@ -365,10 +366,16 @@ SCHEMA:
 """
 
 
-def analyse(scraped_data: dict[str, list[dict]], business_problems: list[str] | None = None) -> dict:
+def analyse(
+    scraped_data: dict[str, list[dict]],
+    business_problems: list[str] | None = None,
+    scrape_period: str | None = None,
+) -> dict:
     now = datetime.now()
     report_month = now.strftime("%B %Y")
-    scrape_period = report_month  # single-snapshot scrape; emailer footer will reference the run date
+    # Caller (api.py) usually passes a lookback-aware label like "Last 15 days"
+    # or "May 1 – Jun 10, 2026"; fall back to the run month if absent.
+    scrape_period = scrape_period or report_month
 
     user_message = _build_user_message(
         scraped_data=scraped_data,

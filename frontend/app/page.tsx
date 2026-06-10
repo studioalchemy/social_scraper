@@ -9,6 +9,10 @@ interface Settings {
   recipient_emails: string[];
   business_problems: string[];
   schedule_days: number;
+  lookback_mode: "days" | "custom";
+  lookback_days: number;
+  lookback_start: string | null;
+  lookback_end: string | null;
 }
 
 interface Status {
@@ -96,6 +100,10 @@ export default function Home() {
     recipient_emails: [],
     business_problems: [],
     schedule_days: 7,
+    lookback_mode: "days",
+    lookback_days: 15,
+    lookback_start: null,
+    lookback_end: null,
   });
   const [status, setStatus] = useState<Status>({
     running: false,
@@ -179,12 +187,18 @@ export default function Home() {
       if (e.key === "Enter") fn();
     };
 
+  const lookbackSummary =
+    settings.lookback_mode === "custom"
+      ? `${settings.lookback_start || "—"} → ${settings.lookback_end || "now"}`
+      : `Last ${settings.lookback_days} day${settings.lookback_days === 1 ? "" : "s"}`;
+
   const saveSettings = async () => {
     const ok = window.confirm(
       `Save these settings?\n\n` +
       `• ${settings.accounts.length} account${settings.accounts.length === 1 ? "" : "s"}\n` +
       `• ${settings.recipient_emails.length} recipient${settings.recipient_emails.length === 1 ? "" : "s"}\n` +
       `• ${settings.business_problems.length} business problem${settings.business_problems.length === 1 ? "" : "s"}\n` +
+      `• Lookback: ${lookbackSummary}\n` +
       `• Every ${settings.schedule_days} ${settings.schedule_days === 1 ? "day" : "days"}`
     );
     if (!ok) return;
@@ -259,6 +273,10 @@ export default function Home() {
   }
 
   const fillPct = ((settings.schedule_days - 1) / 29) * 100;
+  const lookbackFillPct = ((settings.lookback_days - 3) / 87) * 100;
+
+  const setMode = (mode: "days" | "custom") =>
+    setSettings((s) => ({ ...s, lookback_mode: mode }));
 
   return (
     <main style={{
@@ -420,6 +438,169 @@ export default function Home() {
           <span>Weekly</span>
           <span>Monthly</span>
         </div>
+      </section>
+
+      {/* Lookback window */}
+      <section className="surface rise rise-3" style={{
+        padding: "40px 44px",
+        marginBottom: 24,
+      }}>
+        <div style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 16,
+          marginBottom: 26,
+          flexWrap: "wrap",
+        }}>
+          <Eyebrow>Lookback window</Eyebrow>
+          <div className="segmented" role="tablist" aria-label="Lookback mode">
+            <button
+              role="tab"
+              aria-selected={settings.lookback_mode === "days"}
+              onClick={() => setMode("days")}
+              className={settings.lookback_mode === "days" ? "seg-on" : ""}
+            >
+              Last N days
+            </button>
+            <button
+              role="tab"
+              aria-selected={settings.lookback_mode === "custom"}
+              onClick={() => setMode("custom")}
+              className={settings.lookback_mode === "custom" ? "seg-on" : ""}
+            >
+              Custom range
+            </button>
+          </div>
+        </div>
+
+        {settings.lookback_mode === "days" ? (
+          <>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "minmax(0, 1fr) auto",
+              gap: 32,
+              alignItems: "end",
+              marginBottom: 28,
+            }}>
+              <div>
+                <div className="display" style={{
+                  fontSize: "clamp(2.2rem, 5vw, 3.4rem)",
+                  color: "var(--ink-bright)",
+                }}>
+                  Last {settings.lookback_days} {settings.lookback_days === 1 ? "day" : "days"}
+                </div>
+                <div style={{
+                  color: "var(--ink-soft)",
+                  fontSize: 14.5,
+                  marginTop: 10,
+                }}>
+                  Posts, reels, tagged content, and collaborations from this window.
+                </div>
+              </div>
+              <div style={{
+                fontSize: "clamp(70px, 11vw, 124px)",
+                lineHeight: 0.85,
+                fontWeight: 200,
+                color: "var(--ink-bright)",
+                letterSpacing: "-0.07em",
+                textAlign: "right",
+                minWidth: 100,
+                fontVariantNumeric: "tabular-nums",
+              }}>
+                {settings.lookback_days}
+              </div>
+            </div>
+
+            <input
+              type="range"
+              min={3}
+              max={90}
+              value={settings.lookback_days}
+              onChange={(e) =>
+                setSettings((s) => ({ ...s, lookback_days: Number(e.target.value) }))
+              }
+              className="slider"
+              style={{ "--fill": `${lookbackFillPct}%` } as React.CSSProperties}
+              aria-label="Lookback window in days"
+            />
+            <div style={{
+              display: "flex", justifyContent: "space-between",
+              color: "var(--ink-muted)", fontSize: 12.5, marginTop: 12,
+              fontWeight: 500,
+            }}>
+              <span>3 days</span>
+              <span>30 days</span>
+              <span>90 days</span>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="display" style={{
+              fontSize: "clamp(1.7rem, 3.6vw, 2.4rem)",
+              color: "var(--ink-bright)",
+              marginBottom: 8,
+            }}>
+              Custom date range
+            </div>
+            <div style={{
+              color: "var(--ink-soft)",
+              fontSize: 14.5,
+              marginBottom: 22,
+              maxWidth: "60ch",
+            }}>
+              Pick a start and end. Leave either side blank to mean &ldquo;no limit on that end.&rdquo;
+            </div>
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+              gap: 14,
+            }}>
+              <div>
+                <label style={{
+                  display: "block",
+                  color: "var(--ink-muted)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}>From</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={settings.lookback_start ?? ""}
+                  max={settings.lookback_end ?? undefined}
+                  onChange={(e) =>
+                    setSettings((s) => ({ ...s, lookback_start: e.target.value || null }))
+                  }
+                  aria-label="Lookback start date"
+                />
+              </div>
+              <div>
+                <label style={{
+                  display: "block",
+                  color: "var(--ink-muted)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  marginBottom: 8,
+                  letterSpacing: "0.05em",
+                  textTransform: "uppercase",
+                }}>To</label>
+                <input
+                  type="date"
+                  className="input-field"
+                  value={settings.lookback_end ?? ""}
+                  min={settings.lookback_start ?? undefined}
+                  onChange={(e) =>
+                    setSettings((s) => ({ ...s, lookback_end: e.target.value || null }))
+                  }
+                  aria-label="Lookback end date"
+                />
+              </div>
+            </div>
+          </>
+        )}
       </section>
 
       {/* Two-col forms */}
